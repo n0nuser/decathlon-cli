@@ -49,7 +49,7 @@ v/bin/python -c 'from curl_cffi import requests as r; print(r.get("https://www.d
 
 The storefront HTML (fetched via impersonation, for research only) references no client-side catalog/stock API on another host. Its data is server-rendered by Next.js on `www.decathlon.es` itself, which is gated.
 
-Host list sources: earlier public notes (`*.shoppingapp.decathlon.com`, `Accept: application/vnd.dkt.shoppingapp.v2+json`, host-scoped `x-api-key`) and public YesWeHack scope enumerations.
+Candidate hosts came from public YesWeHack scope enumerations. The mobile BFF is understood to expect `Accept: application/vnd.dkt.shoppingapp.v2+json` and a host-scoped `x-api-key`; neither was verified here.
 
 ## Existing landscape
 
