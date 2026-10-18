@@ -1,6 +1,6 @@
 # decathlon.es feasibility
 
-**Verdict: blocked: Cloudflare managed challenge + TLS-fingerprint gating on every storefront path; only a TLS-impersonating client gets through.**
+**Verdict (revised 2026-10-19): viable: FlareSolverr mints the Cloudflare session, then Go `net/http` reuses its cookies and user agent. The original verdict (2026-10-18) was "blocked"; see the addendum.**
 
 Probed 2026-10-18 from Spain (Cloudflare POP `MAD`).
 
@@ -66,3 +66,22 @@ images on `contents.mediadecathlon.com`. Not inspected further: the gate stops h
 1. Go TLS-fingerprint client (`bogdanfinn/tls-client` or `refraction-networking/utls` + HTTP/2 frame tuning). Passes today, but it's an arms race with Cloudflare and adds a heavy dependency.
 2. Headless browser (chromedp/playwright) to solve the challenge and reuse `cf_clearance`. Heavy, not a single static binary.
 3. Mobile-app BFF (`*.shoppingapp.decathlon.com`). Not challenged, so plain Go `net/http` would work, but it needs the `x-api-key` (and possibly a guest token) from the official Android app. That means extracting the APK or MITM-ing the app on a rooted emulator. Lightest runtime path, heaviest discovery; the key can be rotated.
+
+## Addendum 2026-10-19: the gate is the challenge cookie, not Go's TLS fingerprint
+
+The user chose to run FlareSolverr (v3.5.2, `http://localhost:8191`). One `request.get` of
+`/es/` returned these cookies: `__cf_bm` (30-minute `Expires`), `_cfuvid`, `AUTH_STATE`,
+`didomi_token` and `dkt_ecom_user_temporary_id`. It also returned its browser user agent. No `cf_clearance` was set.
+
+Go 1.26 `net/http` (stdlib TLS, HTTP/2) using that cookie set and that exact user agent:
+
+| URL | without cookies | with cookies |
+|---|---|---|
+| `/es/search?Ntt=hornillo+gas` | 403 `cf-mitigated: challenge` | 200, 699 KB |
+| `/es/p/x/303295/m8513471` (redirects to the full product URL) | 403 challenge | 200, 726 KB |
+| `/es/deportes/camping/tiendas-campana/f-store_pamplona?price=from_10_to_40` | 403 challenge | 200, 549 KB |
+
+So the earlier "TLS fingerprint" conclusion was wrong. Without a challenge cookie, plain clients
+are challenged. With one minted by a real browser, the stdlib client passes. The raw HTML carries
+the same Next.js flight payload as the browser DOM. The design is recorded in
+[ADR 0001](adr/0001-flaresolverr-minted-session.md).
