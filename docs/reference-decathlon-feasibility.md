@@ -19,8 +19,9 @@ interstitial (`window._cf_chl_opt`, `challenges.cloudflare.com` in CSP). It is s
 every path tried, including `/favicon.ico`, `/manifest.json`, `/sitemap.xml`,
 `/_next/static/...`, `/api/*` and product/store-locator URLs. Only `/robots.txt` is exempt.
 
-Curl with the complete Chrome header set is still challenged. The same headers pass with an impersonated TLS/HTTP2 fingerprint and fail with
-curl and Go's stdlib, the gate is the JA3/JA4 + HTTP/2 fingerprint, not IP reputation or headers.
+Curl with the complete Chrome header set is still challenged, while the same request passes
+with an impersonated TLS/HTTP2 fingerprint. So the gate is the JA3/JA4 + HTTP/2 fingerprint,
+not IP reputation or headers.
 
 `api.decathlon.net` (candidate mobile/partner API host) returns Cloudflare
 "Attention Required!" 403 to every client, impersonated included.
