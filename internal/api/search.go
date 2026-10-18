@@ -652,7 +652,7 @@ func slugOf(u string) string {
 // site's own slugs drop them the same way.
 var accents = strings.NewReplacer("á", "a", "à", "a", "â", "a", "ä", "a", "é", "e", "è", "e", "ê", "e", "ë", "e",
 	"í", "i", "ì", "i", "î", "i", "ï", "i", "ó", "o", "ò", "o", "ô", "o", "ö", "o", "ú", "u", "ù", "u", "û", "u", "ü", "u",
-	"ñ", "n", "ç", "c")
+	"ñ", "n", "ç", "c", "º", "o", "ª", "a")
 
 // fold lowercases and strips accents, so "campaña" matches "CAMPAÑA" and
 // "campana".
