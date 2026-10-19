@@ -61,6 +61,18 @@ the same page carry other item groups (regression `TestProductPicksItsOwnGroup`)
 - **Sizes:** `skus[]`, each with `sizeLabel`, `gtins[]`, `isAvailable`, `isStorePickupAvailable`, `isHomeOrStoreDeliveryAvailable`.
 - **Store stock:** `storesWithStock[]` is a list of store ids per SKU. **No quantities are exposed anywhere.**
 
+### Marketplace products: `GET /es/p/mp/<slug>/<uuid>/c<n>`
+
+Third-party sellers' listings are identified by a UUID group id, carry no numeric model id
+(`modelId` is undefined), and have a `/c<n>` variance segment. `/es/p/mp/_/<uuid>/c<n>`
+redirects to the canonical URL. Their SKUs have an empty `storesWithStock`, because they are
+not sold in stores. The CLI prints them as `ref: mp/<uuid>/c<n>`.
+
+### Landing pages
+
+Top-level sections such as `/es/deportes/camping` are editorial pages. They have no product
+grid, only the `menuItem` header. Listings start one level down (`/es/deportes/camping/tiendas-campana`).
+
 ### Stores: `GET /es/store-locator`
 
 184 entries, each with `{id, thirdsId, name, coordinates{lat,lng}, address{street, city, postalCode, administrativeAreaLevel1/2}, phoneNumber, workingHours[], holidayHours[]}`.
@@ -77,4 +89,16 @@ Out of scope. The CLI is read-only by design.
 ## 5. Repro
 
 The pages behind each fixture are listed in `internal/api/fixtures_test.go` (`fixtureURLs`).
-`go test ./internal/api` replays them with no network.
+`go test ./internal/api` replays them with no network. Live, with FlareSolverr running:
+
+| section | command | page(s) fetched |
+|---|---|---|
+| session | `decathlon doctor --mint --debug` | FlareSolverr `/v1`, then `/es/` |
+| keyword search | `decathlon search "hornillo gas" --brand campingaz --max-price 40 --sort price_asc --debug` | `/es/search?Ntt=…` (cached), then `…&facets=brandLabel:CAMPINGAZ_&Nf=…&sort=asc` |
+| category listing | `decathlon search --category deportes/camping/tiendas-campana --store 169 --delivery 48h --debug` | `/es/deportes/camping/tiendas-campana/f-store_pamplona/f-lead-time_ud-0-48` |
+| facets | `decathlon search filters --category deportes/camping/tiendas-campana --format pretty` | the unfiltered listing |
+| product | `decathlon product show 303295/8513471 --debug` | `/es/p/_/303295/m8513471`, redirected |
+| marketplace | `decathlon product show mp/a5d8d195-6a1b-4505-9621-2a2fd42d3e81/c251` | `/es/p/mp/_/…/c251`, redirected |
+| stores | `decathlon store list --debug` | `/es/store-locator` (cached 24 h) |
+| per-store stock | `decathlon store stock 303295/8513471 --store 169 --all` | store locator (cached), product page |
+| categories | `decathlon category list --depth 3` | `/es/` (cached 24 h) |
