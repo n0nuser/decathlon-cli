@@ -15,6 +15,10 @@
 
 [documentation](https://n0nuser.github.io/decathlon-cli/docs) | [command reference](https://n0nuser.github.io/decathlon-cli/docs/reference) | [examples](examples/README.md) | [github](https://github.com/n0nuser/decathlon-cli)
 
+<p align="center">
+  <img src="images/demos/search.gif" width="640" alt="decathlon search demo">
+</p>
+
 ## for AI agents
 
 register the read-only commands as mcp tools, or read the notes bundled for agents:
