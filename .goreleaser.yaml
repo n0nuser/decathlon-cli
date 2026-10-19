@@ -46,3 +46,65 @@ release:
     name: decathlon-cli
   draft: false
   prerelease: auto
+
+# Homebrew, Scoop and AUR are ready but disabled. Each needs a repository and a
+# secret that does not exist for this account yet, and an enabled block makes
+# `release.yml` fail. Uncomment a block once its prerequisites are in place.
+
+# Homebrew: needs a public `homebrew-tap` repository and the
+# HOMEBREW_TAP_GITHUB_TOKEN secret (the Actions GITHUB_TOKEN cannot write to
+# another repo).
+# homebrew_casks:
+#   - name: decathlon
+#     repository:
+#       owner: n0nuser
+#       name: homebrew-tap
+#       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+#     homepage: https://github.com/n0nuser/decathlon-cli
+#     description: Terminal CLI for decathlon.es
+#     license: MIT
+#     # The binary is not notarized, so Gatekeeper would kill it on first run
+#     # unless the quarantine flag Homebrew sets on the download is removed.
+#     hooks:
+#       post:
+#         install: |
+#           if OS.mac?
+#             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/decathlon"]
+#           end
+
+# Scoop: needs a public `scoop-bucket` repository and the
+# SCOOP_BUCKET_GITHUB_TOKEN secret.
+# scoops:
+#   - name: decathlon
+#     repository:
+#       owner: n0nuser
+#       name: scoop-bucket
+#       token: "{{ .Env.SCOOP_BUCKET_GITHUB_TOKEN }}"
+#     homepage: https://github.com/n0nuser/decathlon-cli
+#     description: Terminal CLI for decathlon.es
+#     license: MIT
+
+# AUR: needs an AUR account with the decathlon-cli-bin package and an
+# AUR_SSH_PRIVATE_KEY secret holding its ssh private key.
+# aurs:
+#   - name: decathlon-cli-bin
+#     homepage: https://github.com/n0nuser/decathlon-cli
+#     description: Terminal CLI for decathlon.es
+#     license: MIT
+#     maintainers:
+#       - n0nuser <n0nuser@users.noreply.github.com>
+#     private_key: "{{ .Env.AUR_SSH_PRIVATE_KEY }}"
+#     git_url: ssh://aur@aur.archlinux.org/decathlon-cli-bin.git
+#     skip_upload: auto
+#     provides:
+#       - decathlon
+#     conflicts:
+#       - decathlon
+#     depends:
+#       - ca-certificates
+#     package: |-
+#       install -Dm755 "./decathlon" "${pkgdir}/usr/bin/decathlon"
+#       install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/decathlon-cli-bin/LICENSE"
+#     commit_author:
+#       name: n0nuser
+#       email: n0nuser@users.noreply.github.com
