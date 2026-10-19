@@ -41,7 +41,7 @@ type SearchResult struct {
 	Category    *CategoryRef    `json:"category,omitempty"`
 	URL         string          `json:"url"` // what the site served, after redirects
 	Total       int             `json:"total"`
-	Page        int             `json:"page"` // zero-based
+	Page        int             `json:"page"` // 1-based page number, as the site and the header show it
 	Pages       int             `json:"pages"`
 	PerPage     int             `json:"per_page"`
 	Applied     []AppliedFilter `json:"applied_filters"`
@@ -232,7 +232,7 @@ func ParseListing(p *Page) (*SearchResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	r := &SearchResult{URL: p.URL, base: u, Total: w.TotalNumberOfProducts, Page: w.Pagination.Current, Pages: w.Pagination.Total, PerPage: w.Pagination.NbItemsPerPage, Applied: []AppliedFilter{}, Products: []Product{}}
+	r := &SearchResult{URL: p.URL, base: u, Total: w.TotalNumberOfProducts, Page: w.Pagination.Current + 1, Pages: w.Pagination.Total, PerPage: w.Pagination.NbItemsPerPage, Applied: []AppliedFilter{}, Products: []Product{}}
 	if strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/search") {
 		r.mode = modeKeyword
 		r.Query = u.Query().Get("Ntt")
@@ -351,7 +351,10 @@ type SearchParams struct {
 	MinPrice float64     `json:"min_price,omitempty"`
 	MaxPrice float64     `json:"max_price,omitempty"`
 	Sort     string      `json:"sort,omitempty"`
-	Page     int         `json:"page,omitempty"`
+	// Page is a 1-based page number, the way the site and the header count
+	// them. The zero value means the first page, so a zero-value SearchParams
+	// costs one request.
+	Page int `json:"page,omitempty"`
 }
 
 type FilterArg struct {
@@ -397,7 +400,7 @@ func IsLandingPage(err error) bool {
 }
 
 func (p SearchParams) modified() bool {
-	return len(p.Filters) > 0 || p.MinPrice > 0 || p.MaxPrice > 0 || p.Sort != "" || p.Page > 0
+	return len(p.Filters) > 0 || p.MinPrice > 0 || p.MaxPrice > 0 || p.Sort != "" || p.Page > 1
 }
 
 func (p SearchParams) entry() (string, error) {
@@ -562,12 +565,13 @@ func (r *SearchResult) Build(p SearchParams) (string, *SearchResult, error) {
 			}
 		}
 	}
-	if p.Page > 0 {
+	if p.Page > 1 {
 		per := r.PerPage
 		if per == 0 {
 			per = 40
 		}
-		q.Set("from", strconv.Itoa(p.Page*per))
+		// Page 1 is from=0; page N starts N-1 pages in.
+		q.Set("from", strconv.Itoa((p.Page-1)*per))
 		q.Set("size", strconv.Itoa(per))
 	}
 	if len(segs) > 0 {

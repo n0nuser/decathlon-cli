@@ -98,7 +98,7 @@ func (v searchView) Pretty(w io.Writer, color bool) {
 	}
 	head := fmt.Sprintf("%d products · %s", v.Total, title)
 	if v.Pages > 1 {
-		head += fmt.Sprintf(" · page %d of %d", v.Page+1, v.Pages)
+		head += fmt.Sprintf(" · page %d of %d", v.Page, v.Pages)
 	}
 	if len(v.Applied) > 0 {
 		var fs []string
@@ -128,7 +128,7 @@ func (v searchView) Pretty(w io.Writer, color bool) {
 	if len(v.Suggestions) > 0 && v.Total == 0 {
 		fmt.Fprintln(w, output.Dim("did you mean: "+strings.Join(v.Suggestions, ", "), color))
 	}
-	if v.Page+1 < v.Pages {
+	if v.Page < v.Pages {
 		fmt.Fprintln(w, output.Dim(fmt.Sprintf("more: --page %d", v.Page+1), color))
 	}
 }
@@ -164,8 +164,8 @@ Examples:
 			if pages < 1 {
 				return output.Usagef("--pages must be at least 1")
 			}
-			if page < 0 {
-				return output.Usagef("--page is 0-based and cannot be negative")
+			if page < 1 {
+				return output.Usagef("--page is a 1-based page number and cannot be below 1")
 			}
 			if limit < 0 {
 				return output.Usagef("--limit cannot be negative")
@@ -183,7 +183,7 @@ Examples:
 					res.Products = append(res.Products, r.Products...)
 					res.Page = r.Page
 				}
-				if r.Page+1 >= r.Pages || (limit > 0 && len(res.Products) >= limit) {
+				if r.Page >= r.Pages || (limit > 0 && len(res.Products) >= limit) {
 					break
 				}
 				p.Page++
@@ -195,7 +195,7 @@ Examples:
 		},
 	}
 	a.bindSearchFlags(cmd, &f)
-	cmd.Flags().IntVar(&page, "page", 0, "result page to start from (0-based, 40 products each)")
+	cmd.Flags().IntVar(&page, "page", 1, "result page to start from (1-based, 40 products each)")
 	cmd.Flags().IntVar(&pages, "pages", 1, "how many pages to fetch")
 	cmd.Flags().IntVar(&limit, "limit", 0, "stop after this many products (0: whole pages)")
 	cmd.AddCommand(a.searchFiltersCmd())

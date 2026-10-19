@@ -41,7 +41,7 @@ decathlon search "botas montaña" --pages 3 --format jsonl | jq -r .url
 | `--limit` | int | `0` | stop after this many products (0: whole pages) |
 | `--max-price` | float64 | `0` | maximum price in euros |
 | `--min-price` | float64 | `0` | minimum price in euros |
-| `--page` | int | `0` | result page to start from (0-based, 40 products each) |
+| `--page` | int | `1` | result page to start from (1-based, 40 products each) |
 | `--pages` | int | `1` | how many pages to fetch |
 | `--sort` | string | - | relevance, price_asc, price_desc, discount, rating, newest (newest: categories only) |
 | `--store` | string | - | only products in stock at this store (id or name; category listings only) |

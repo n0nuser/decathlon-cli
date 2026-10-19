@@ -52,7 +52,8 @@ public needs a session beyond the Cloudflare cookie.
 - **Filter resolution.** Filters are matched, by id, label or slug and ignoring case and accents, against the facets of the unfiltered page, which is cached for 10 minutes. The CLI then builds the URL from the fragments the site attaches to each value. Any filter the website shows therefore works, and `search filters` lists them.
 - **Store and delivery** facets exist only on category listings. On a keyword page they are a usage error (exit 2).
 - **A store that holds none of the listed products** is not offered as a facet value by the site, so the CLI returns an empty listing.
-- **JSON:** `{query, category, url, total, page, pages, per_page, applied_filters[], products[], suggestions[]}`.
+- **`--page N`** is 1-based, as the site counts and as the header prints. Page 1 is the first page and costs a single request; any other page resolves filters against the unfiltered page first.
+- **JSON:** `{query, category, url, total, page, pages, per_page, applied_filters[], products[], suggestions[]}`. `page` is the 1-based number of the page returned.
 - **Each product:** `{ref, id, model_id, sku_id, title, brand, price, currency, reference_price, discount_percent, rating, reviews, available_online, marketplace, seller, sizes[], url, image}`.
 - **`ref`** is what `product show`, `store stock` and `watch add product` accept: `GROUP/MODEL` for Decathlon's own products, `mp/UUID/cN` for marketplace sellers.
 - **`--format jsonl`** prints one product per line.

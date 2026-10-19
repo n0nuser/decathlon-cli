@@ -195,7 +195,7 @@ var Tools = []Tool{
 		{Name: "max_price", Type: "number", Flag: "max-price", Description: "euros"},
 		{Name: "sort", Type: "string", Flag: "sort", Description: "relevance, price_asc, price_desc, discount, rating, newest"},
 		{Name: "filter", Type: "object", Flag: "filter", Description: "other filters as {key: value}, keys from the page's facets"},
-		{Name: "page", Type: "integer", Flag: "page", Description: "0-based page"},
+		{Name: "page", Type: "integer", Flag: "page", Description: "1-based page number"},
 		{Name: "limit", Type: "integer", Flag: "limit", Description: "max products"},
 	}},
 	{Name: "product_show", Description: "Read a product page: every colour and size, prices, online availability and the ids of stores holding each size.", Command: []string{"product", "show"}, Args: []Arg{

@@ -39,3 +39,10 @@ and before release. Classes are **H** (fix before shipping), **M** (should fix) 
 | L | `watch events --since` filters with a lexicographic compare on `RFC3339Nano` strings. Within one second, a whole-second timestamp (`…:47Z`) sorts after a fractional one (`…:47.5Z`), so a boundary event can be included or dropped wrongly. Events from a single check share one timestamp and the id ordering is exact, so this only bites on the `--since` edge; not worth a schema migration. |
 | L | A challenge larger than 64 KiB is taken for a real page, because the interstitial is assumed small. If Cloudflare grows it, the symptom is exit 7 rather than a re-mint. |
 | L | `config set` re-serialises the whole file from the typed schema, so hand-written comments and key order are lost on any edit. Editing in place would need a TOML-aware editor. |
+
+## Follow-up (reviewer finding)
+
+| id | class | finding | fix | regression test |
+|---|---|---|---|---|
+| bug 13 | H | `--page` was a 0-based index while the site, the header and the more-hint counted from 1: `--page 2` fetched the third page (`from=80`), `--page 1` fetched the second (`from=40`), and the first page was only reachable as `--page 0`. Following the printed page number always landed a page past, so page 2 looked skipped; the JSON `page` field was 0-based too. | `--page`, the header, the more-hint and the JSON `page` are all 1-based page numbers, matching the site. `SearchParams.Page` is 1-based (zero means the first page, so a zero value still costs one request) and builds `from=(page-1)*per`. The search-watch loop, which advances a page number, starts at 1 and breaks on `page >= pages`. | `TestSearchPageNumbering`, `TestWatchSearchPagesAreOneBased`, `TestBuildPageNumbers`, `TestListingKeyword` |
+

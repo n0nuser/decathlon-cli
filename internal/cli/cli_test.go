@@ -52,6 +52,7 @@ type fake struct {
 func newFake(t *testing.T) *fake {
 	f := &fake{t: t, pages: map[string][]byte{
 		"/es/search?Ntt=hornillo+gas":                                                page(t, "listing_keyword"),
+		"/es/search?Ntt=hornillo+gas&from=40&size=40":                                page(t, "listing_keyword"),
 		"/es/deportes/camping/tiendas-campana":                                       page(t, "listing_redirect"),
 		"/es/p/tienda-de-campana-2-personas-quechua-mh100/303295/c251c98c74m8513471": page(t, "product_mh100"),
 		"/es/store-locator":                                                          page(t, "store_locator"),
@@ -284,6 +285,79 @@ func TestDoctorReportsBrokenConfig(t *testing.T) {
 	}
 	if !strings.Contains(errs, "doctor found problems") {
 		t.Fatalf("stderr: %s", errs)
+	}
+}
+
+// Regression (bug 13): --page was read as a 0-based index while the header and
+// the site count pages from 1, so --page 2 fetched the third page and the
+// more-hint named a page other than the one it led to.
+func TestSearchPageNumbering(t *testing.T) {
+	newFake(t)
+
+	// Page 1 is the default, and the header and hint agree with it.
+	out, errs, code := run(t, "search", "hornillo gas", "--format", "pretty")
+	if code != 0 {
+		t.Fatal(errs)
+	}
+	if !strings.Contains(out, "page 1 of 11") || !strings.Contains(out, "more: --page 2") {
+		t.Fatalf("page 1 header/hint:\n%s", out)
+	}
+
+	// The JSON field is the same 1-based number.
+	out, errs, code = run(t, "search", "hornillo gas")
+	if code != 0 {
+		t.Fatal(errs)
+	}
+	var r struct {
+		Page  int `json:"page"`
+		Pages int `json:"pages"`
+	}
+	if err := json.Unmarshal([]byte(out), &r); err != nil {
+		t.Fatal(err, out)
+	}
+	if r.Page != 1 || r.Pages != 11 {
+		t.Fatalf("json page %d of %d, want 1 of 11", r.Page, r.Pages)
+	}
+
+	// --page 2 fetches the second page, not the third.
+	_, errs, code = run(t, "search", "hornillo gas", "--page", "2", "--debug")
+	if code != 0 {
+		t.Fatal(errs)
+	}
+	if !strings.Contains(errs, "from=40&size=40") {
+		t.Fatalf("--page 2 did not fetch the second page:\n%s", errs)
+	}
+	if strings.Contains(errs, "from=80") {
+		t.Fatalf("--page 2 skipped to the third page:\n%s", errs)
+	}
+
+	// --page 1 is the first page, fetched as-is.
+	_, errs, code = run(t, "search", "hornillo gas", "--page", "1", "--debug")
+	if code != 0 {
+		t.Fatal(errs)
+	}
+	if strings.Contains(errs, "from=") {
+		t.Fatalf("--page 1 asked for a later page:\n%s", errs)
+	}
+
+	if _, _, code := run(t, "search", "hornillo gas", "--page", "0"); code != 2 {
+		t.Fatalf("--page 0 accepted, exit %d", code)
+	}
+}
+
+// Regression (bug 13): the search-watch loop advances a page number, so with
+// 1-based numbering it must start at 1 and still walk forward.
+func TestWatchSearchPagesAreOneBased(t *testing.T) {
+	newFake(t)
+	_, errs, code := run(t, "watch", "add", "search", "hornillo gas", "--pages", "2", "--name", "stoves", "--debug")
+	if code != 0 {
+		t.Fatal(errs)
+	}
+	if !strings.Contains(errs, "from=40&size=40") {
+		t.Fatalf("the second watched page was never fetched:\n%s", errs)
+	}
+	if strings.Contains(errs, "from=80") {
+		t.Fatalf("the watch asked for a third page it did not configure:\n%s", errs)
 	}
 }
 

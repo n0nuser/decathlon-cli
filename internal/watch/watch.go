@@ -159,6 +159,9 @@ func checkSearch(ctx context.Context, c *api.Client, t SearchTarget, seen map[st
 		pages = 1
 	}
 	p := t.Params
+	if p.Page < 1 {
+		p.Page = 1 // page numbers are 1-based; an older target may not name one
+	}
 	for i := 0; i < pages; i++ {
 		r, err := c.Search(ctx, p)
 		if err != nil {
@@ -179,7 +182,7 @@ func checkSearch(ctx context.Context, c *api.Client, t SearchTarget, seen map[st
 			res.Upserts = append(res.Upserts, store.Seen{Key: key, Snapshot: snap(tileState{Price: pr.Price, Ref: ref})})
 			seen[key] = res.Upserts[len(res.Upserts)-1] // a product listed twice reports once
 		}
-		if r.Page+1 >= r.Pages {
+		if r.Page >= r.Pages {
 			break
 		}
 		p.Page++

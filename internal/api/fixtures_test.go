@@ -75,6 +75,10 @@ func TestListingKeyword(t *testing.T) {
 	if r.Total < 100 || len(r.Products) != 40 || r.PerPage != 40 || r.Pages < 2 {
 		t.Fatalf("total %d products %d per %d pages %d", r.Total, len(r.Products), r.PerPage, r.Pages)
 	}
+	// Page numbers are 1-based, as the site counts them and the header prints.
+	if r.Page != 1 {
+		t.Fatalf("first page reports page %d, want 1", r.Page)
+	}
 	p := r.Products[0]
 	if p.ID == "" || p.ModelID == "" || p.Title == "" || p.Brand == "" || p.Price <= 0 || p.Currency != "EUR" || !strings.HasPrefix(p.URL, "https://www.decathlon.es/es/p/") {
 		t.Fatalf("first product incomplete: %+v", p)
@@ -95,6 +99,9 @@ func TestListingRedirectIsCategory(t *testing.T) {
 	}
 	if r.mode != modeCategory || r.Category == nil || r.Category.Path != "deportes/camping/tiendas-campana" {
 		t.Fatalf("mode %v category %+v", r.mode, r.Category)
+	}
+	if r.Page != 1 {
+		t.Fatalf("first page reports page %d, want 1", r.Page)
 	}
 	if _, err := r.facet("store"); err != nil {
 		t.Fatal("category listings offer the store facet:", err)
@@ -123,7 +130,7 @@ func TestListingCategoryStore(t *testing.T) {
 
 func TestBuildKeyword(t *testing.T) {
 	r, _ := ParseListing(fixture(t, "listing_keyword"))
-	got, empty, err := r.Build(SearchParams{Filters: []FilterArg{{"brand", "forclaz"}, {"brand", "Campingaz"}}, MinPrice: 10, MaxPrice: 40, Sort: "price_asc", Page: 1})
+	got, empty, err := r.Build(SearchParams{Filters: []FilterArg{{"brand", "forclaz"}, {"brand", "Campingaz"}}, MinPrice: 10, MaxPrice: 40, Sort: "price_asc", Page: 2})
 	if err != nil || empty != nil {
 		t.Fatal(err, empty)
 	}
@@ -131,6 +138,42 @@ func TestBuildKeyword(t *testing.T) {
 	want := "https://www.decathlon.es/es/search?Nf=sku.modelLowestPrice%7CBTWN%2B10%2B40&Ntt=hornillo+gas&facets=brandLabel%3AFORCLAZ_brandLabel%3ACAMPINGAZ_&from=40&size=40&sort=asc"
 	if got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
+	}
+}
+
+// Regression (bug 13): --page was read as a 0-based index while the header and
+// the site count pages from 1, so --page 2 fetched the third page and the
+// more-hint named a page one below the one it led to.
+func TestBuildPageNumbers(t *testing.T) {
+	r, _ := ParseListing(fixture(t, "listing_keyword"))
+	for _, c := range []struct {
+		page int
+		want string // the from= value, "" when the first page is requested as-is
+	}{
+		{0, ""}, // the zero value means the first page
+		{1, ""}, // page 1 is the unfiltered first page
+		{2, "40"},
+		{3, "80"},
+	} {
+		got, _, err := r.Build(SearchParams{Page: c.page})
+		if err != nil {
+			t.Fatalf("page %d: %v", c.page, err)
+		}
+		if c.want == "" {
+			if strings.Contains(got, "from=") {
+				t.Errorf("page %d: asked the site for %s", c.page, got)
+			}
+			continue
+		}
+		if !strings.Contains(got, "from="+c.want+"&") || !strings.Contains(got, "size=40") {
+			t.Errorf("page %d: got %s, want from=%s", c.page, got, c.want)
+		}
+	}
+	if (SearchParams{Page: 1}).modified() {
+		t.Error("--page 1 must stay a single request")
+	}
+	if !(SearchParams{Page: 2}).modified() {
+		t.Error("--page 2 needs a second request")
 	}
 }
 
