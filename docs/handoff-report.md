@@ -86,7 +86,7 @@ network.
   page, surfacing as exit 7 rather than a re-mint.
 - **`config set` rewrites the whole file** from the typed schema, so hand-written comments and key
   order are lost on any edit.
-- **docs domain is a placeholder.** README links use `DOCS_DOMAIN`; set it when the site is hosted.
+- **docs domain.** README links point at `https://n0nuser.github.io/decathlon-cli/` (the GitHub Pages URL from `pages.yml`).
 - **Pre-existing commit trailers.** Commits made by the previous agent carry a `Co-Authored-By` /
   `Claude-Session` trailer; they are in already-pushed history and were left alone (no force-push).
   This session's commits carry none.

@@ -64,4 +64,5 @@ API of record (ADR 0002).
 - Locate flight data by its keys, never by row id: ids change on every page. The product is the item group whose id is in the URL, not the first one found (bug 1).
 - Output contract: data on stdout (JSON default), diagnostics on stderr, exit codes per `docs/cli-spec.md` §7. Adding a field is fine; renaming or removing one is a breaking change.
 - `docs-site/` is maintained separately. `make docs` regenerates `docs-site/content/docs/reference/` from the cobra tree; change help text in `internal/cli`, not the generated pages.
+- Distribution: `scripts/install.sh` (curl | sh), the `npm/` wrapper (`npx decathlon-cli`) and the release archives. Publishing the npm package is gated on an `NPM_TOKEN` repository secret. Homebrew, Scoop and AUR are planned and stay out of `.goreleaser.yaml` until a tap repository, a scoop bucket and an AUR ssh key exist; adding them early breaks `release.yml`.
 - No cart, checkout or account features. See ADR 0003.

@@ -1,0 +1,35 @@
+# sample decathlon-cli config. copy to the path `decathlon config path` prints,
+# usually ~/.config/decathlon-cli/config.toml (mode 0600).
+
+# the FlareSolverr instance that mints the Cloudflare session (env FLARESOLVERR_URL wins)
+flaresolverr_url = "http://localhost:8191"
+
+# default stores for `store stock`, product watches and `--near`
+stores = ["169", "86"]
+
+# default centre for distances when --near is not given
+[location]
+lat = 42.8125
+lng = -1.6458
+
+# default interval for `watch check` (minimum 5m)
+[watch]
+interval = "30m"
+
+# a phone push through ntfy.sh (url + topic; token_file for a protected topic)
+[sinks.phone]
+type = "ntfy"
+url = "https://ntfy.sh"
+topic = "my-decathlon-alerts"
+
+# a local program; each event arrives as json on stdin, with
+# DECATHLON_EVENT_TYPE and DECATHLON_WATCH in the environment
+[sinks.script]
+type = "exec"
+command = ["/home/me/bin/on-decathlon-event"]
+
+# a chat webhook; template is "discord" or "slack", or unset for the raw event
+[sinks.chat]
+type = "webhook"
+url = "https://discord.com/api/webhooks/..."
+template = "discord"

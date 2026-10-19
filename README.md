@@ -13,7 +13,7 @@
 
 `decathlon` is an unofficial terminal cli for decathlon.es. you can search with every filter the website has, read product pages, and see which physical stores hold each size. you can also watch products and searches for price and stock changes. it is read-only: no cart, no account, no checkout. it is a single static go binary; the only thing it needs beside it is a local flaresolverr. it prints json unless asked otherwise, ready for `jq`, and `--format pretty` gives tables for a person to read.
 
-[documentation](https://DOCS_DOMAIN/docs) | [command reference](https://DOCS_DOMAIN/docs/reference) | [github](https://github.com/n0nuser/decathlon-cli)
+[documentation](https://n0nuser.github.io/decathlon-cli/docs) | [command reference](https://n0nuser.github.io/decathlon-cli/docs/reference) | [examples](examples/README.md) | [github](https://github.com/n0nuser/decathlon-cli)
 
 ## for AI agents
 
@@ -22,9 +22,46 @@ register the read-only commands as mcp tools, or read the notes bundled for agen
 ```bash
 decathlon mcp install claude-code     # also: codex, cursor
 decathlon skills get decathlon-usage  # or: decathlon skills list
+decathlon search "tienda campaña" --limit 1   # smoke: confirms the wiring end to end
 ```
 
 the server exposes `search`, `product_show`, `store_list`, `store_stock`, `category_list`, `watch_list` and `watch_check`; each returns the command's json.
+
+## install
+
+the one-liner (linux and macos) resolves the latest release, picks your os and arch, verifies the archive against `checksums.txt` and installs `decathlon` to `~/.local/bin`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/n0nuser/decathlon-cli/main/scripts/install.sh | sh
+```
+
+pin a release with `VERSION` (the tag without the leading `v`), and change the target directory with `DECATHLON_INSTALL_DIR` or `PREFIX` (`$PREFIX/bin`). every path:
+
+| path | command |
+|---|---|
+| curl \| sh | `curl -fsSL https://raw.githubusercontent.com/n0nuser/decathlon-cli/main/scripts/install.sh \| sh` |
+| go install | `go install github.com/n0nuser/decathlon-cli/cmd/decathlon@latest` |
+| npx (npm wrapper in [`npm/`](npm), publishing gated on `NPM_TOKEN`) | `npx decathlon-cli search "tienda campaña"` |
+| release binary | `decathlon_<version>_<os>_<arch>.tar.gz` from [releases](https://github.com/n0nuser/decathlon-cli/releases), verified below |
+| from source | `git clone https://github.com/n0nuser/decathlon-cli && cd decathlon-cli && make install` |
+
+release binaries: download the archive **and** `checksums.txt`, verify, then extract:
+
+```bash
+# resolve the latest tag (or set version=1.2.3 by hand)
+version=$(curl -fsSL https://api.github.com/repos/n0nuser/decathlon-cli/releases/latest |
+  sed -n 's/.*"tag_name": *"v\?\([^"]*\)".*/\1/p')
+os=linux arch=amd64        # or darwin / windows, arm64
+base="https://github.com/n0nuser/decathlon-cli/releases/download/v${version}"
+curl -fsSLO "$base/decathlon_${version}_${os}_${arch}.tar.gz"
+curl -fsSLO "$base/checksums.txt"          # download first
+sha256sum --ignore-missing -c checksums.txt  # then verify
+gh attestation verify checksums.txt --repo n0nuser/decathlon-cli
+tar xzf "decathlon_${version}_${os}_${arch}.tar.gz" decathlon
+install -m 755 decathlon ~/.local/bin/
+```
+
+homebrew, scoop and aur are planned; they need a tap repository, a scoop bucket and an aur ssh key (plus the `NPM_TOKEN` above) before goreleaser can publish them. see [AGENTS.md](AGENTS.md).
 
 ## why
 
@@ -45,27 +82,10 @@ it listens on `http://localhost:8191`, which is the default. point the cli elsew
 
 ### 2. install the binary
 
-**from a release.** download the archive for your os and arch from [releases](https://github.com/n0nuser/decathlon-cli/releases), extract `decathlon` and put it on your `PATH`:
+see [install](#install). the short version:
 
 ```bash
-version=0.1.0 os=linux arch=amd64   # or darwin / windows, arm64
-curl -fsSLO "https://github.com/n0nuser/decathlon-cli/releases/download/v${version}/decathlon_${version}_${os}_${arch}.tar.gz"
-tar xzf "decathlon_${version}_${os}_${arch}.tar.gz" decathlon
-install -m 755 decathlon ~/.local/bin/
-```
-
-releases come with a `checksums.txt` that github attests was built by this repository's release workflow. check both before installing:
-
-```bash
-gh release download --repo n0nuser/decathlon-cli --pattern checksums.txt
-sha256sum --ignore-missing -c checksums.txt
-gh attestation verify checksums.txt --repo n0nuser/decathlon-cli
-```
-
-**with go install:**
-
-```bash
-go install github.com/n0nuser/decathlon-cli/cmd/decathlon@latest
+curl -fsSL https://raw.githubusercontent.com/n0nuser/decathlon-cli/main/scripts/install.sh | sh
 ```
 
 ### 3. check it works
@@ -230,8 +250,9 @@ without the variable it is skipped, so `go test ./...` stays offline.
 
 ## documentation
 
-full docs: [DOCS_DOMAIN/docs](https://DOCS_DOMAIN/docs). the command reference there is generated from the binary (`make docs`).
+full docs: [n0nuser.github.io/decathlon-cli/docs](https://n0nuser.github.io/decathlon-cli/docs). the command reference there is generated from the binary (`make docs`).
 
+- [examples](examples/README.md): ready-to-run recipes
 - [docs/cli-spec.md](docs/cli-spec.md): what every command accepts and prints
 - [docs/troubleshooting.md](docs/troubleshooting.md): blocked, solver down, IP blocks
 - [docs/decathlon-api-discovery.md](docs/decathlon-api-discovery.md): how the storefront was read
