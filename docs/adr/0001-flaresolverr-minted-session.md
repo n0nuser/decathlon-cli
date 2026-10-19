@@ -45,10 +45,11 @@ needed for each request.
 
 ## Dependencies
 
-The user asked for a stdlib-only binary. The CLI uses the stdlib for HTTP, TLS, HTML/flight
-parsing, config (JSON instead of TOML) and watch state (JSON files instead of SQLite). The one
-exception is `spf13/cobra` (with `pflag`), which shell completion and the generated command
-reference depend on.
+The transport uses the stdlib only (`net/http`, `crypto/tls`, `net/http/cookiejar`). There is no
+TLS-fingerprint client and no browser in the binary. The rest of the CLI uses cobra/pflag
+(commands, completion, generated reference), `pelletier/go-toml/v2` (config.toml), pure-Go
+`modernc.org/sqlite` (watch state, so the binary stays static), `adrg/xdg` (paths) and
+`toon-format/toon-go` (`--format toon`).
 
 ## Consequences
 
