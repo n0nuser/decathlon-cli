@@ -71,6 +71,11 @@ func Execute(version string, args []string, stdin io.Reader, stdout, stderr io.W
 		fmt.Fprintln(stderr, "decathlon: interrupted")
 		return 130
 	}
+	// cobra reports unknown commands and bad argument counts as plain errors;
+	// the contract (§7) makes those usage failures, like bad flags.
+	if isUsageError(err) {
+		err = output.Usagef("%s", err)
+	}
 	path := "decathlon"
 	if cmd != nil {
 		path = cmd.CommandPath()
@@ -85,6 +90,23 @@ func Execute(version string, args []string, stdin io.Reader, stdout, stderr io.W
 // CommandTree is the command tree without running it, for cmd/docsgen.
 func CommandTree(version string) *cobra.Command {
 	return (&App{Version: version}).rootCmd()
+}
+
+// isUsageError reports whether err is one of cobra's command/argument
+// validation failures, which are usage errors rather than runtime ones.
+func isUsageError(err error) bool {
+	var ue *output.UsageError
+	var ae *api.Error
+	if errors.As(err, &ue) || errors.As(err, &ae) {
+		return false
+	}
+	s := err.Error()
+	for _, prefix := range []string{"unknown command ", "accepts ", "requires at least ", "requires at most ", "required flag(s) "} {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) rootCmd() *cobra.Command {
