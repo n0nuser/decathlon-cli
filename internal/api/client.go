@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -157,15 +158,116 @@ func (c *Client) notice(s string) {
 	}
 }
 
+// Retry policy. Transient failures (5xx, network, timeout) get two more
+// attempts, spaced 500ms and 1s (doubling, capped at 5s). A 429 is honoured
+// once when its Retry-After is short enough. Bot-protection blocks are never
+// retried here: Fetch re-mints the session once and then reports them.
+const (
+	maxAttempts   = 3
+	retryBase     = 500 * time.Millisecond
+	retryCap      = 5 * time.Second
+	maxRetryAfter = 3 * time.Minute
+)
+
 func (c *Client) get(ctx context.Context, target string) (*Page, error) {
-	if wait := c.Gap - time.Since(c.last); wait > 0 && !c.last.IsZero() {
-		select {
-		case <-time.After(wait):
-		case <-ctx.Done():
-			return nil, ctx.Err()
+	rateRetried := false
+	for attempt := 0; ; attempt++ {
+		if err := c.waitGap(ctx); err != nil {
+			return nil, err
+		}
+		p, err := c.attempt(ctx, target)
+		c.last = time.Now()
+		if err == nil {
+			return p, nil
+		}
+		var e *Error
+		if !errors.As(err, &e) {
+			return nil, err
+		}
+		var wait time.Duration
+		switch {
+		case e.Kind == KindBlocked && e.Status == http.StatusTooManyRequests:
+			if rateRetried || attempt+1 >= maxAttempts || e.RetryAfter <= 0 || e.RetryAfter > maxRetryAfter {
+				return nil, e
+			}
+			rateRetried, wait = true, e.RetryAfter
+		case e.Kind == KindNetwork && e.Retryable:
+			if attempt+1 >= maxAttempts {
+				return nil, e
+			}
+			wait = backoff(attempt)
+		default:
+			return nil, e
+		}
+		if c.Debug != nil {
+			fmt.Fprintf(c.Debug, "GET %s failed (%s); retrying in %s\n", target, e.Msg, wait.Round(time.Millisecond))
+		}
+		if err := sleep(ctx, wait); err != nil {
+			return nil, err
 		}
 	}
-	defer func() { c.last = time.Now() }()
+}
+
+// waitGap spaces attempts by at least Gap from the end of the previous one.
+func (c *Client) waitGap(ctx context.Context) error {
+	if wait := c.Gap - time.Since(c.last); wait > 0 && !c.last.IsZero() {
+		return sleep(ctx, wait)
+	}
+	return nil
+}
+
+// backoff is the pause before transient retry n: 500ms, 1s, 2s, ...
+func backoff(attempt int) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+	d := retryBase
+	for i := 0; i < attempt && d < retryCap; i++ {
+		d *= 2
+	}
+	if d > retryCap {
+		d = retryCap
+	}
+	return d
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		return nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// retryAfter reads a Retry-After header: delta-seconds or an HTTP-date.
+func retryAfter(value string, now time.Time) (time.Duration, bool) {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(v); err == nil {
+		if secs < 0 {
+			return 0, false
+		}
+		return time.Duration(secs) * time.Second, true
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		if d := t.Sub(now); d > 0 {
+			return d, true
+		}
+		return 0, true
+	}
+	return 0, false
+}
+
+// attempt is one request; get decides whether to try again.
+func (c *Client) attempt(ctx context.Context, target string) (*Page, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, err
@@ -194,7 +296,12 @@ func (c *Client) get(ctx context.Context, target string) (*Page, error) {
 	case isChallenge(resp, body):
 		return nil, &Error{Kind: KindBlocked, Msg: "cloudflare challenged the request", Status: resp.StatusCode, Endpoint: path, Retryable: true}
 	case resp.StatusCode == http.StatusTooManyRequests:
-		return nil, &Error{Kind: KindBlocked, Msg: "decathlon is rate limiting this address; wait a few minutes", Status: resp.StatusCode, Endpoint: path, Retryable: true}
+		e := &Error{Kind: KindBlocked, Msg: "decathlon is rate limiting this address; wait a few minutes", Status: resp.StatusCode, Endpoint: path, Retryable: true}
+		if d, ok := retryAfter(resp.Header.Get("Retry-After"), time.Now()); ok {
+			e.RetryAfter = d
+			e.Msg = fmt.Sprintf("decathlon is rate limiting this address; it asks to wait %s", d)
+		}
+		return nil, e
 	case resp.StatusCode == http.StatusNotFound:
 		return nil, &Error{Kind: KindNotFound, Msg: "decathlon has no page at " + path, Status: resp.StatusCode, Endpoint: path}
 	case resp.StatusCode >= 500:

@@ -1,6 +1,9 @@
 package api
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 // Kind classifies a failure so the CLI can pick an exit code and a remedy.
 type Kind int
@@ -56,6 +59,9 @@ type Error struct {
 	Endpoint  string // path only, never the query: search terms stay private
 	Body      string // short, for the issue form
 	Retryable bool
+	// RetryAfter is the wait a 429 asked for, when the site sent a
+	// Retry-After header. Zero when it did not.
+	RetryAfter time.Duration
 	// Landing marks a section page with no product list. It is still a
 	// usage error (exit 2), but `category show` falls back to the menu.
 	Landing bool
