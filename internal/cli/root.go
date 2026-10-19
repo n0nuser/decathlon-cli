@@ -210,5 +210,3 @@ func (a *App) confirm(yes bool, prompt string) error {
 	}
 	return nil
 }
-
-func (a *App) saveConfig() error { return config.Save(a.Paths.ConfigFile, a.Cfg) }

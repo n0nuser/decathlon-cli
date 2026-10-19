@@ -1,0 +1,51 @@
+name: verify release
+
+# Downloads a published release the way a user would, without Go, and checks
+# the archive against checksums.txt and its provenance attestation.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: release tag to verify (e.g. v0.1.0)
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      TAG: ${{ inputs.tag || github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: download, verify and run
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          version="${TAG#v}"
+          case "$RUNNER_OS" in
+            Linux) os=linux; ext=tar.gz ;;
+            macOS) os=darwin; ext=tar.gz ;;
+            Windows) os=windows; ext=zip ;;
+          esac
+          case "$(uname -m)" in
+            x86_64|amd64) arch=amd64 ;;
+            arm64|aarch64) arch=arm64 ;;
+          esac
+          archive="decathlon_${version}_${os}_${arch}.${ext}"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$archive" --pattern checksums.txt
+          grep " ${archive}\$" checksums.txt > want.txt
+          if command -v sha256sum >/dev/null; then sha256sum -c want.txt; else shasum -a 256 -c want.txt; fi
+          gh attestation verify checksums.txt --repo "$GITHUB_REPOSITORY"
+          if [ "$ext" = zip ]; then unzip -q "$archive"; bin=./decathlon.exe; else tar xzf "$archive"; bin=./decathlon; fi
+          actual="$("$bin" --version)"
+          echo "$actual"
+          [ "$actual" = "decathlon $version" ]
