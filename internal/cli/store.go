@@ -182,7 +182,7 @@ whether a store holds a size, never how many.
 
 Examples:
   decathlon store stock 303295/8513471 --near 40.4168,-3.7038 --limit 10 --format pretty
-  decathlon store stock 336529/8668913 --size 42 --store 169 --store Badalona --all
+  decathlon store stock 336529/8668913 --size 41 --store 169 --store Badalona --all
   decathlon store stock 303295/8513471 --format jsonl | jq -r 'select(.in_stock) | .store_name'`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

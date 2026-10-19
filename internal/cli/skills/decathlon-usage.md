@@ -35,7 +35,7 @@ search they are a usage error (exit 2).
 ```sh
 decathlon store list --near 40.4168,-3.7038 --limit 5
 decathlon store stock 303295/8513471 --near 40.4168,-3.7038     # stores holding each size
-decathlon store stock 336529/8668913 --size 42 --store 169 --all # yes/no for one store
+decathlon store stock 336529/8668913 --size 41 --store 169 --all # yes/no for one store
 ```
 
 Stock is presence only. `in_stock` means the store is listed as holding that size. There are

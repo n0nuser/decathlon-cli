@@ -174,7 +174,7 @@ default); with neither, every store's changes are reported.
 
 Examples:
   decathlon watch add product 303295/8513471 --store 169 --name tent
-  decathlon watch add product 336529/8668913 --size 42 --store Badalona --name boots --notify phone`,
+  decathlon watch add product 336529/8668913 --size 41 --store Badalona --name boots --notify phone`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			_, refModel, err := api.ParseRef(args[0])
