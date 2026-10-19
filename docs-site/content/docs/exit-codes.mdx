@@ -1,0 +1,36 @@
+---
+title: Exit codes
+description: What each exit status means, and which ones are worth retrying.
+---
+
+Every command exits with a code a script can branch on. Nothing writes to stdout on failure,
+so you can read stdout and check `$?` independently.
+
+| Code | Meaning | Retry? |
+| --- | --- | --- |
+| `0` | Success, including "nothing changed" | - |
+| `1` | Generic failure, including `doctor` finding a problem | Maybe |
+| `2` | Usage: bad flags, an unknown filter value, a missing location | No, fix the command |
+| `4` | Not found: a product reference, a store, or a watch | No |
+| `5` | Blocked or rate limited, or FlareSolverr could not get past the challenge | Yes, after a wait |
+| `6` | Network or timeout, including an unreachable FlareSolverr | Yes |
+| `7` | API changed: a page returned a shape the CLI does not understand | No, [report it](/docs/api-changes) |
+| `130` | Interrupted | - |
+
+## Using them
+
+Back off on the retryable codes and stop on the rest:
+
+```bash
+decathlon watch check --all
+case $? in
+  0) ;;
+  5|6) sleep 300; decathlon watch check --all ;;
+  *)  exit 1 ;;
+esac
+```
+
+<Callout type="idea" title="Pair with the error envelope">
+  `--error-format json` prints a stable `category` string and a `retryable` boolean next to
+  the code. Branch on those when you log failures. See [Output](/docs/output).
+</Callout>

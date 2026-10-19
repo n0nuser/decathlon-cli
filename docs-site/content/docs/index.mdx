@@ -1,0 +1,57 @@
+---
+title: decathlon-cli
+description: Search decathlon.es, check store stock and watch prices from the terminal. JSON by default.
+---
+
+`decathlon` is a read-only Go client for the decathlon.es storefront. The site exposes no
+catalogue or stock API, so the CLI reads the same pages the browser loads, decodes them, and
+prints the result as JSON. Search, product pages, the store directory and per-store stock
+become things you can pipe into `jq`, schedule, or hand to an agent.
+
+<Cards>
+  <Card title="Install" href="/docs/install">
+    Build from source or grab a release, then point the CLI at FlareSolverr.
+  </Card>
+  <Card title="Output and formats" href="/docs/output">
+    JSON by default, a table when you want to read it, JSONL when you want to pipe it.
+  </Card>
+  <Card title="Command reference" href="/docs/reference">
+    Every command and flag, generated from the binary.
+  </Card>
+  <Card title="Watches" href="/docs/watches">
+    Turn a product or a search into a stream of change events.
+  </Card>
+  <Card title="Scheduling checks" href="/docs/scheduling">
+    Let a timer run the checks so you do not have to.
+  </Card>
+</Cards>
+
+## What it looks like
+
+```bash
+decathlon search "tienda campaña" --format pretty
+decathlon search "hornillo gas" --brand campingaz --max-price 40 --sort price_asc
+decathlon product show 303295/8513471
+decathlon store stock 303295/8513471 --near 40.4168,-3.7038 --format pretty
+decathlon watch add product 303295/8513471 --store 169 --name tent
+```
+
+Most commands print JSON on stdout. Diagnostics go to stderr, so a pipe stays clean.
+
+```bash
+decathlon search --category deportes/camping/tiendas-campana --store 169 \
+  | jq -r '.products[] | "\(.price) \(.title)"'
+```
+
+## A local helper, not an account client
+
+The CLI is read-only by design. There is no cart, no login, no checkout, and no account data
+is touched. What it does need is a way past the storefront's Cloudflare gate: requests are
+minted through a local FlareSolverr and then replayed from Go. That is the only moving part,
+and `decathlon doctor` verifies it.
+
+<Callout type="warn" title="Unofficial">
+  Decathlon publishes no API. This talks to the pages the website serves, so it can break when
+  the site changes shape. When that happens the CLI exits `7` with a prefilled issue link
+  rather than returning something empty. See [API changes](/docs/api-changes).
+</Callout>

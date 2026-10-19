@@ -1,0 +1,75 @@
+---
+title: Output and formats
+description: JSON by default, a table for reading, JSONL for streams.
+---
+
+Results go to stdout, JSON by default. Diagnostics go to stderr, so stdout stays parseable
+whether or not something went wrong.
+
+```bash
+decathlon search "hornillo gas" | jq '.products[0]'
+```
+
+## Formats
+
+<Tabs items={['json', 'pretty', 'jsonl', 'toon']} id="format">
+  <Tab value="json">
+    The default. One indented JSON document.
+
+    ```bash
+    decathlon search "tienda campaña"
+    ```
+  </Tab>
+  <Tab value="pretty">
+    A compact table for reading in the terminal: reference, price, brand, title, rating.
+
+    ```bash
+    decathlon search "tienda campaña" --format pretty
+    ```
+  </Tab>
+  <Tab value="jsonl">
+    One object per line, for pipes and streams. Lists become one line per element.
+
+    ```bash
+    decathlon store stock 303295/8513471 --format jsonl \
+      | jq -r 'select(.in_stock) | .store_name'
+    ```
+  </Tab>
+  <Tab value="toon">
+    TOON output, for language-model context.
+
+    ```bash
+    decathlon search "tienda campaña" --format toon
+    ```
+  </Tab>
+</Tabs>
+
+Colour in pretty output follows `NO_COLOR` and switches off when stdout is not a terminal, so
+redirecting to a file never writes escape codes.
+
+## Errors
+
+Errors are human-readable by default:
+
+```
+decathlon: no product with that reference
+```
+
+For scripts, ask for the envelope with `--error-format json` (or set
+`DECATHLON_ERROR_FORMAT`):
+
+```bash
+decathlon --error-format json product show 999999/1
+```
+
+```json
+{
+  "code": 4,
+  "category": "not_found",
+  "retryable": false,
+  "message": "no product with that reference"
+}
+```
+
+`category` is a stable string to branch on; `code` is the exit status. See
+[Exit codes](/docs/exit-codes).

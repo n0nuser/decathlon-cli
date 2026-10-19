@@ -1,0 +1,96 @@
+---
+title: Watches
+description: Turn a product or a search into a stream of change events.
+---
+
+A watch is a saved query the CLI re-runs on demand and diffs against what it saw last time.
+What comes out is events, not results: only what changed since the previous check. Watches
+live in a local database.
+
+```bash
+decathlon watch add product 303295/8513471 --store 169 --name tent
+decathlon watch add search "hornillo gas" --max-price 30 --name stoves
+decathlon watch check --all
+```
+
+The first check is a silent baseline, so you are not flooded with everything that exists
+already. Pass `--emit-initial` on `add` to report the current state as events instead.
+
+## What you get
+
+A product watch diffs price, online availability and per-store stock. A search watch diffs
+the first `--pages` pages (1 to 5) for new products and price changes.
+
+Event types are:
+
+- `product.new`, `product.price_changed`, `product.removed`
+- `sku.new`, `sku.back_online`, `sku.sold_out_online`
+- `store.in_stock`, `store.out_of_stock`
+
+Each event is a JSON object:
+
+```json
+{
+  "type": "store.in_stock",
+  "watch": "tent",
+  "at": "2026-10-19T09:15:00Z",
+  "product": { "id": "303295", "model_id": "8513471", "title": "...", "url": "..." },
+  "store": { "id": "169", "name": "Pamplona", "city": "Pamplona" }
+}
+```
+
+Delivery to sinks is best-effort: a sink that fails is logged to stderr and the check still
+records the new state, so nothing is retried. The diff pipeline is ordered the other way:
+state is committed only after delivery is attempted, so a check that crashes before committing
+re-reports what it saw. Deduplicate on the event fields if that matters to your sink.
+
+```bash
+decathlon watch list --format pretty
+decathlon watch events tent --since 24h
+```
+
+## Sinks
+
+By default events go to stdout. A sink sends them somewhere else. Sinks live in `config.toml`
+rather than the database, so they are easy to review and version. A watch names its sinks with
+`--notify` (repeatable).
+
+<Tabs items={['ntfy', 'webhook', 'exec']} id="sink-type">
+  <Tab value="ntfy">
+    ```toml
+    [sinks.phone]
+    type = "ntfy"
+    url = "https://ntfy.sh"
+    topic = "my-decathlon-alerts"
+    token_file = "~/.config/decathlon-cli/ntfy-token"
+    ```
+  </Tab>
+  <Tab value="webhook">
+    ```toml
+    [sinks.discord]
+    type = "webhook"
+    url = "https://discord.com/api/webhooks/..."
+    template = "discord"
+    ```
+
+    The body is the event JSON. `template = "discord"` (or `slack`) wraps it for that service.
+  </Tab>
+  <Tab value="exec">
+    ```toml
+    [sinks.script]
+    type = "exec"
+    command = ["/home/me/bin/on-decathlon-event"]
+    ```
+
+    The command receives one event as JSON on stdin, per event.
+  </Tab>
+</Tabs>
+
+```bash
+decathlon sink list --format pretty
+decathlon sink test phone   # sends a synthetic event
+```
+
+<Callout type="info" title="Test the sink before you rely on it">
+  Run `sink test` once when you add a sink, so you know the watch notifies you.
+</Callout>

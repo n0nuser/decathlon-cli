@@ -1,0 +1,17 @@
+{
+  "title": "decathlon-cli",
+  "pages": [
+    "index",
+    "---Getting started---",
+    "install",
+    "---Using it---",
+    "output",
+    "exit-codes",
+    "examples",
+    "watches",
+    "scheduling",
+    "---Reference---",
+    "reference",
+    "api-changes"
+  ]
+}

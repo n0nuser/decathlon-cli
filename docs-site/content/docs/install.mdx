@@ -1,0 +1,53 @@
+---
+title: Install
+description: Build the binary, then get FlareSolverr running.
+---
+
+`decathlon` is a single static Go binary. The one thing it depends on at runtime is a local
+FlareSolverr, which mints the Cloudflare session the storefront requires.
+
+## Go install
+
+```bash
+go install github.com/n0nuser/decathlon-cli/cmd/decathlon@latest
+decathlon --version
+```
+
+## Build from source
+
+```bash
+git clone https://github.com/n0nuser/decathlon-cli
+cd decathlon-cli
+go build -o decathlon ./cmd/decathlon
+./decathlon --version
+```
+
+Release archives ship `checksums.txt` alongside the binaries; verify the archive before you
+install it.
+
+## FlareSolverr
+
+Requests go through a local [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)
+instance. The default endpoint is `http://localhost:8191`. Point the CLI elsewhere with the
+`FLARESOLVERR_URL` environment variable or the `flaresolverr_url` config key:
+
+```bash
+export FLARESOLVERR_URL=http://localhost:8191
+decathlon config set flaresolverr_url http://localhost:8191
+```
+
+## Check the setup
+
+```bash
+decathlon doctor --format pretty
+```
+
+`doctor` checks that the config parses, the sinks are valid, FlareSolverr answers, a session
+exists (or can be minted), and a plain request with it reaches `decathlon.es`. It exits `1`
+if any check fails. `--mint` throws away the stored session and mints a fresh one.
+
+<Callout type="info" title="Why FlareSolverr at all">
+  Every storefront path sits behind a Cloudflare challenge. FlareSolverr mints the challenge
+  cookie once; after that the CLI replays the session with plain Go HTTP requests and re-mints
+  automatically when Cloudflare expires it.
+</Callout>

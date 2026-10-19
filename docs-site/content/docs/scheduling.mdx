@@ -1,0 +1,69 @@
+---
+title: Scheduling checks
+description: Keep watches running after you close the terminal.
+---
+
+A watch only produces events when something runs `watch check`. There is no built-in service,
+so you point your own scheduler at the command. Two shapes work well.
+
+## One-shot checks from a scheduler
+
+`watch check` runs the due watches once, sends their events to the configured sinks, prints
+them, and exits `0` even when nothing changed. That is what a timer should run.
+
+```bash
+*/30 * * * * decathlon watch check --format jsonl >> ~/decathlon-events.jsonl
+```
+
+`--all` ignores the schedule and checks every watch. Without it, only watches whose interval
+has elapsed since their last check run.
+
+<Callout type="warn" title="Be gentle">
+  Each check is real page loads on a real shop, at least two seconds apart. Keep the interval
+  at or above the watch's own interval, which cannot go below five minutes.
+</Callout>
+
+## A systemd user timer
+
+```ini
+# ~/.config/systemd/user/decathlon-watch.service
+[Unit]
+Description=Run due decathlon watches
+
+[Service]
+Type=oneshot
+ExecStart=%h/go/bin/decathlon watch check --format jsonl
+```
+
+```ini
+# ~/.config/systemd/user/decathlon-watch.timer
+[Unit]
+Description=Run decathlon watches every 30 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now decathlon-watch.timer
+```
+
+Enable lingering (`loginctl enable-linger $USER`) if the timer should keep running while you
+are logged out.
+
+## A foreground loop
+
+For a session you are watching, `watch run` stays in the foreground, checks the due watches on
+every tick and streams events one per line. Stop it with Ctrl-C.
+
+```bash
+decathlon watch run --interval 30m
+```
+
+The tick defaults to 30 minutes and cannot go below five. Events go to stdout as JSONL, so you
+can leave it in a pane or pipe it.

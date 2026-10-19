@@ -1,0 +1,54 @@
+---
+title: When the storefront changes
+description: Why the CLI fails loudly instead of quietly returning nothing.
+---
+
+Decathlon publishes no API. Everything here reads the pages the website serves, and those
+pages change without notice.
+
+The choice this CLI makes is to fail loudly. A search that returns zero results because a
+field moved costs you the product you were waiting for. A search that stops and says so costs
+you a retry.
+
+## What it looks like
+
+When a page answers with a shape the CLI does not understand, it exits `7` and prints what it
+saw, along with a link that opens a prefilled GitHub issue.
+
+```bash
+decathlon product show 303295/8513471
+```
+
+```
+decathlon: decathlon.es returned a page the cli does not understand
+  endpoint: /es/p/_/303295/m8513471
+  decode: expected the product group, found none
+
+the storefront may have changed. Report it with this prefilled link:
+  https://github.com/n0nuser/decathlon-cli/issues/new?...
+rerun with --debug to see the requests.
+```
+
+The report carries the endpoint path, the status and the decode error. It never carries a
+search term: the issue link is built from the command path with argument values stripped.
+
+## Telling failures apart
+
+Exit `7` means the page loaded and the data inside was the wrong shape. That is a code
+problem; report it.
+
+Exit `5` means Cloudflare refused even a freshly minted session, or the site rate limited you.
+That is not an API change. Wait a few minutes and retry.
+
+Exit `6` is the network, including a FlareSolverr that is not running. Start it and retry.
+
+## Check your setup first
+
+```bash
+decathlon doctor
+```
+
+`doctor` checks that the config parses, the sinks are valid, FlareSolverr answers, a session
+exists or can be minted, and a plain request with it reaches `decathlon.es`. Run it before
+filing anything: most surprises are a stale session or a stopped FlareSolverr, not a changed
+API.

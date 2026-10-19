@@ -1,0 +1,61 @@
+---
+title: Examples
+description: Search, filter, inspect a product, find stock, and watch for changes.
+---
+
+A few commands end to end. Everything here is read-only and needs only a running FlareSolverr.
+
+## Search
+
+Keyword search prints JSON. `--format pretty` turns it into a table for reading.
+
+```bash
+decathlon search "tienda campaña" --format pretty
+decathlon search "hornillo gas" --brand campingaz --max-price 40 --sort price_asc --format pretty
+```
+
+A keyword search that matches a category is redirected to it by the site. Reaching for
+`--category` directly is more predictable, and category listings are the only ones that offer
+the store and delivery filters:
+
+```bash
+decathlon category list --depth 3
+decathlon search --category deportes/camping/tiendas-campana --store 169 --delivery 48h --format pretty
+```
+
+Not every filter has a flag. List what the page offers, then pass the rest as `key=value`:
+
+```bash
+decathlon search filters --category deportes/camping/tiendas-campana --format pretty
+decathlon search --category deportes/camping/tiendas-campana --filter "Nº de plazas=2 plazas"
+```
+
+## Inspect a product
+
+Take the `id/model_id` from a search result (the same pair shown in the `REF` column), or pass
+the product URL. You get every colour and size, the price, and online availability.
+
+```bash
+decathlon product show 303295/8513471 --format pretty
+```
+
+## Find stock
+
+`store stock` reports which physical stores hold each size. Presence only; the site never
+exposes quantities.
+
+```bash
+decathlon store list --near 40.4168,-3.7038 --limit 5 --format pretty
+decathlon store stock 303295/8513471 --near 40.4168,-3.7038 --format pretty
+decathlon store stock 336529/8668913 --size 42 --store 169 --all
+```
+
+## Watch for changes
+
+```bash
+decathlon watch add product 303295/8513471 --store 169 --name tent --notify phone
+decathlon watch add search "hornillo gas" --max-price 30 --name stoves
+decathlon watch check --format jsonl | jq -r 'select(.type=="store.in_stock") | .store.name'
+```
+
+See [Watches](/docs/watches) for the event types and sinks.
