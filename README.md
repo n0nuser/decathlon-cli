@@ -64,7 +64,7 @@ decathlon --version
 decathlon doctor --format pretty
 ```
 
-`doctor` checks four things: the config parses, flaresolverr answers, a session exists (or can be minted), and decathlon.es answers a plain request with it.
+`doctor` checks five things: the config parses, any sinks are valid, flaresolverr answers, a session exists (or can be minted), and decathlon.es answers a plain request with it. if one of them fails, see [troubleshooting](docs/troubleshooting.md).
 
 ### 4. use it
 
@@ -214,6 +214,7 @@ tests never touch the network. they replay real pages captured from the site aga
 full docs: [DOCS_DOMAIN/docs](https://DOCS_DOMAIN/docs). the command reference there is generated from the binary (`make docs`).
 
 - [docs/cli-spec.md](docs/cli-spec.md): what every command accepts and prints
+- [docs/troubleshooting.md](docs/troubleshooting.md): blocked, solver down, IP blocks
 - [docs/decathlon-api-discovery.md](docs/decathlon-api-discovery.md): how the storefront was read
 - [docs/adr](docs/adr): decisions
 - [AGENTS.md](AGENTS.md): vocabulary and rules for contributors and agents
