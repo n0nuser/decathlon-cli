@@ -23,6 +23,7 @@ var fixtureURLs = map[string]string{
 	"product_nh500":          "https://www.decathlon.es/es/p/botas-de-montana-y-trekking-impermeables-de-cuero-hombre-quechua-nh500/336529/c392m8668913",
 	"store_locator":          "https://www.decathlon.es/es/store-locator",
 	"home":                   "https://www.decathlon.es/es",
+	"product_marketplace":    "https://www.decathlon.es/es/p/mp/tienda-campana-4-personas-205x205x130-cm-aktive/a5d8d195-6a1b-4505-9621-2a2fd42d3e81/c251",
 }
 
 func fixture(t testing.TB, name string) *Page {
@@ -276,5 +277,47 @@ func TestProductPath(t *testing.T) {
 		if _, err := ProductPath(bad); err == nil {
 			t.Errorf("%s accepted", bad)
 		}
+	}
+}
+
+// Regression (bug 2): marketplace listings use /p/mp/<slug>/<uuid>/c<n>.
+// The product URL pattern read the slug as the group id, so their pages
+// were reported as not found, and search printed an unusable uuid/uuid_c251
+// ref for them.
+func TestMarketplace(t *testing.T) {
+	r, _ := ParseListing(fixture(t, "listing_redirect"))
+	var mp *Product
+	for i := range r.Products {
+		if r.Products[i].Marketplace {
+			mp = &r.Products[i]
+			break
+		}
+	}
+	if mp == nil {
+		t.Fatal("fixture has no marketplace product")
+	}
+	if !strings.HasPrefix(mp.Ref, "mp/") || strings.Contains(mp.Ref, "_") {
+		t.Fatalf("ref %q", mp.Ref)
+	}
+	if _, err := ProductPath(mp.Ref); err != nil {
+		t.Fatal(err)
+	}
+	d, err := ParseProduct(fixture(t, "product_marketplace"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.ID != "a5d8d195-6a1b-4505-9621-2a2fd42d3e81" || len(d.Models) != 1 || d.Models[0].Ref != "mp/a5d8d195-6a1b-4505-9621-2a2fd42d3e81/c251" || !d.Models[0].Marketplace {
+		t.Fatalf("%+v", d.Models)
+	}
+	if n := len(d.Models[0].SKUs[0].StoresWithStock); n != 0 {
+		t.Fatalf("marketplace items are not in stores, got %d", n)
+	}
+}
+
+func TestFirstPartyRef(t *testing.T) {
+	r, _ := ParseListing(fixture(t, "listing_keyword"))
+	p := r.Products[0]
+	if p.Ref != p.ID+"/"+p.ModelID {
+		t.Fatalf("ref %q", p.Ref)
 	}
 }

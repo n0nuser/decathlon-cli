@@ -14,6 +14,7 @@ import (
 
 // Product is one listing tile: a model (one colour) of a product group.
 type Product struct {
+	Ref             string   `json:"ref"`      // pass to product show, store stock and watch add product
 	ID              string   `json:"id"`       // product group ("supermodel") id, the number in /p/.../<id>/
 	ModelID         string   `json:"model_id"` // the colour shown
 	SkuID           string   `json:"sku_id,omitempty"`
@@ -314,6 +315,11 @@ func (wp wireProduct) product(pageURL string) Product {
 	if p.ID == "" {
 		p.ID, _, _ = strings.Cut(wp.ID, "_")
 	}
+	p.Ref = p.ID + "/" + p.ModelID
+	if u, err := url.Parse(p.URL); err == nil && strings.Contains(u.Path, "/p/mp/") {
+		// Marketplace listings: uuid ids, no numeric model, a /c<n> variance.
+		p.Ref = "mp/" + p.ID + "/" + u.Path[strings.LastIndex(u.Path, "/")+1:]
+	}
 	return p
 }
 
@@ -418,6 +424,8 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, err
 		return nil, err
 	}
 	if !p.modified() {
+		// Keep it for the filter, sort or page request that may follow.
+		c.store(c.Abs(entry), page)
 		return base, nil
 	}
 	target, empty, err := base.Build(p)
@@ -684,4 +692,11 @@ func (c *Client) Filters(ctx context.Context, p SearchParams) (*SearchResult, er
 		return nil, err
 	}
 	return ParseListing(page)
+}
+
+// Path is the storefront path a value links to, without its query, in the
+// form --category takes. Subcategory values are category pages.
+func (v FacetValue) Path() string {
+	p, _, _ := strings.Cut(v.url, "?")
+	return strings.TrimPrefix(strings.Trim(p, "/"), "es/")
 }

@@ -24,6 +24,7 @@ type ProductDetail struct {
 }
 
 type Model struct {
+	Ref             string   `json:"ref"` // this colour, for product show / store stock
 	ModelID         string   `json:"model_id"`
 	Colors          []string `json:"colors,omitempty"`
 	Selected        bool     `json:"selected"` // the model the URL pointed at
@@ -121,27 +122,50 @@ func pick(ts []priceTarget) *priceTarget {
 }
 
 // productRefRE pulls the group id and optional model id out of a product
-// URL: /es/p/<slug>/<group>/<variance>m<model>.
-var productRefRE = regexp.MustCompile(`/p/[^/]+/([A-Za-z0-9]+)(?:/[a-z0-9]*?m([0-9]+))?`)
+// URL: /es/p/<slug>/<group>/<variance>m<model>, or for marketplace sellers
+// /es/p/mp/<slug>/<uuid>/c<variance> (no model id).
+var productRefRE = regexp.MustCompile(`/p/(?:mp/)?[^/]+/([A-Za-z0-9-]+)(?:/[a-z0-9]*?m([0-9]+))?`)
 
-// ProductPath turns what the user typed into a product page path. A full
-// URL is used as given; "303295" or "303295/8513471" (group/model) become a
-// short URL the site redirects to the canonical one. A bare group id needs a
-// model id: the site has no group-only route.
+var uuidRE = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// ProductPath turns what the user typed into a product page path:
+//   - a full product URL, used as given;
+//   - GROUP/MODEL (as `ref` in search output, e.g. 303295/8513471), which
+//     the site redirects to the canonical URL;
+//   - mp/UUID/cN for marketplace listings.
+//
+// A bare group id is refused: the site has no group-only route.
 func ProductPath(ref string) (string, error) {
+	path, _, err := ParseRef(ref)
+	return path, err
+}
+
+// ParseRef is ProductPath plus the model id the ref names, if any.
+func ParseRef(ref string) (path, model string, err error) {
 	ref = strings.TrimSpace(ref)
-	if u, err := url.Parse(ref); err == nil && u.IsAbs() {
-		if !productRefRE.MatchString(u.Path) {
-			return "", Usage("%q is not a decathlon product url (they look like /es/p/<name>/<id>/...m<model>)", ref)
+	if u, perr := url.Parse(ref); perr == nil && u.IsAbs() {
+		m := productRefRE.FindStringSubmatch(u.Path)
+		if m == nil || !strings.Contains(u.Path, "/p/") {
+			return "", "", Usage("%q is not a decathlon product url (they look like /es/p/<name>/<id>/...m<model>)", ref)
 		}
-		return u.String(), nil
+		return u.String(), m[2], nil
+	}
+	if rest, ok := strings.CutPrefix(ref, "mp/"); ok {
+		id, variance, _ := strings.Cut(rest, "/")
+		if uuidRE.MatchString(id) && (variance == "" || alnum(variance)) {
+			p := "/es/p/mp/_/" + id
+			if variance != "" {
+				p += "/" + variance
+			}
+			return p, "", nil
+		}
 	}
 	group, model, _ := strings.Cut(ref, "/")
 	model = strings.TrimPrefix(model, "m")
 	if group == "" || model == "" || !alnum(group) || !digits(model) {
-		return "", Usage("give a product url, or GROUP/MODEL ids as printed by search (id and model_id), e.g. 303295/8513471")
+		return "", "", Usage("give a product url, or the ref search prints (GROUP/MODEL such as 303295/8513471, or mp/UUID/cN)")
 	}
-	return "/es/p/_/" + group + "/m" + model, nil
+	return "/es/p/_/" + group + "/m" + model, model, nil
 }
 
 func alnum(s string) bool {
@@ -225,6 +249,12 @@ func ParseProduct(p *Page) (*ProductDetail, error) {
 	}
 	for _, g := range ig.SkuGroups {
 		md := Model{ModelID: g.ModelID, Selected: g.IsSelected, URL: absURL(p.URL, g.ModelURL), SKUs: []SKU{}}
+		md.Ref = ig.ID + "/" + g.ModelID
+		if g.ModelID == "" {
+			if mu, err := url.Parse(md.URL); err == nil {
+				md.Ref = "mp/" + ig.ID + "/" + mu.Path[strings.LastIndex(mu.Path, "/")+1:]
+			}
+		}
 		for _, c := range g.VarianceAttributes.Colors {
 			md.Colors = append(md.Colors, c.Name)
 		}
