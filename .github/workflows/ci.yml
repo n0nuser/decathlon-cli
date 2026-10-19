@@ -33,11 +33,12 @@ jobs:
 
   docs-reference:
     runs-on: ubuntu-latest
-    if: hashFiles('docs-site/package.json') != ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # Runs once docs-site/ is in the tree.
       - name: command reference matches the binary
+        if: hashFiles('docs-site/package.json') != ''
         run: make docs-check

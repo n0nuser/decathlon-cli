@@ -1,26 +1,26 @@
 name: Storefront change
-description: The CLI said "the storefront may have changed" (exit code 7)
+description: A command exited 7 and printed a link to this form
 title: "[api change] "
 labels: [api-change]
 body:
   - type: markdown
     attributes:
       value: |
-        The CLI filled in most of this from the failing request. Search terms, product ids and store ids are never included automatically; add them only if you want to.
+        Most fields arrive filled in from the failed request. The CLI leaves out search terms, product refs and store ids on purpose; paste them below if they help reproduce it.
   - type: input
     id: version
     attributes:
-      label: CLI version
+      label: decathlon --version
     validations:
       required: true
   - type: input
     id: os
     attributes:
-      label: OS / arch
+      label: Platform
   - type: input
     id: command
     attributes:
-      label: Command (path only)
+      label: Command name
   - type: input
     id: endpoint
     attributes:
@@ -28,14 +28,14 @@ body:
   - type: input
     id: status
     attributes:
-      label: HTTP status
+      label: Status code
   - type: textarea
-    id: body_excerpt
+    id: report
     attributes:
-      label: What the CLI reported
+      label: What the parser expected
       render: text
   - type: textarea
-    id: extra
+    id: notes
     attributes:
-      label: Anything else
-      description: Output of `decathlon doctor`, or a `--debug` log.
+      label: Notes
+      description: "`decathlon doctor` output, a `--debug` run, the search or product that failed."

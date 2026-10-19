@@ -90,12 +90,12 @@ public needs a session beyond the Cloudflare cookie.
 - Add mode:
   - The first check runs before the watch is saved, so a target that doesn't resolve is refused rather than stored broken.
   - The first check is a silent baseline unless `--emit-initial` is given.
-  - The interval defaults to config `watch.interval` or 30m. The minimum is 5m.
+  - Without `--interval`, config `watch.interval` applies, else 30m; nothing below 5m is accepted.
 - Other verbs:
   - `watch list` lists watches.
   - `watch remove NAME [--yes]` deletes a watch and its events.
   - `watch check [NAME...] [--all]` checks the due watches (or the named ones, or all), prints their events, delivers them to sinks, then commits state.
-  - `watch run [--interval DUR]` runs the same check in a foreground loop with up to 10% jitter.
+  - `watch run [--interval DUR]` runs the same check in a foreground loop, each sleep stretched by a random tenth at most.
   - `watch events [NAME] [--since DUR] [--limit N]` reads stored events.
 - Event types:
   - `product.new`, `product.price_changed`: search watches.
@@ -142,7 +142,7 @@ Sinks are declared in config, with type `ntfy` (`url`, `topic`, `token_file`), `
 
 ## 5. Global flags
 
-| flag | default | meaning |
+| global flag | default | effect |
 |---|---|---|
 | `--format json\|jsonl\|pretty\|toon` | `json` | stdout rendering; `jsonl` is one element per line |
 | `--error-format text\|json` | `text` | stderr errors (env `DECATHLON_ERROR_FORMAT`) |
@@ -153,16 +153,16 @@ Sinks are declared in config, with type `ntfy` (`url`, `topic`, `token_file`), `
 
 ## 6. I/O contract
 
-- stdout carries data only: one JSON document per command, or JSON lines.
+- stdout carries results and nothing else: a single JSON value, or with `jsonl` one value per line.
 - stderr carries errors, notices (such as a session re-mint) and debug lines.
-- Prompts appear only when stdin, stdout and stderr are all TTYs and `--no-input` is off.
+- The CLI asks questions only when all three standard streams are terminals and `--no-input` is unset.
 - Text that comes from the storefront is stripped of control characters before pretty output.
 
 ## 7. Exit codes
 
-| code | meaning |
+| exit | when |
 |---|---|
-| 0 | success (including "nothing changed") |
+| 0 | it worked; a check with no changes counts |
 | 1 | generic failure; doctor found problems; some watches failed |
 | 2 | usage: bad flags, unknown filter or value, store filter on a keyword search, landing page |
 | 3 | reserved for auth (unused: the CLI has no accounts) |
@@ -179,12 +179,12 @@ Text errors are one line on stderr, prefixed `decathlon:`, with a hint where one
 `--error-format json` prints `{code, category, retryable, message, http_status, endpoint,
 suggested_commands, issue_url}`.
 
-Exit 7 links to `.github/ISSUE_TEMPLATE/api-change.yml`, prefilled with the version, OS/arch,
-command path (no argument values), page path, HTTP status and the parser's message.
+Exit 7 links to `.github/ISSUE_TEMPLATE/api-change.yml`, filled in with the build version, platform,
+the command's name (never its arguments), the page path, the status code and what the parser expected.
 
 ## 9. Config, state, env
 
-| what | path | mode |
+| file | location | permissions |
 |---|---|---|
 | config | `$XDG_CONFIG_HOME/decathlon-cli/config.toml` (or `DECATHLON_CONFIG`) | 0600 (webhook URLs are secrets) |
 | session | `$XDG_CONFIG_HOME/decathlon-cli/session.json` | 0600, atomic |
@@ -241,7 +241,7 @@ internal/output/     json/jsonl/pretty/toon, error envelope, exit codes
 internal/store/      SQLite: watches, seen state, events
 internal/watch/      one check per watch kind, diffing, events
 internal/sink/       ntfy, webhook, exec
-internal/mcp/        stdio server, tool table, harness install
+internal/mcp/        JSON-RPC over stdio, the tool list, harness config writers
 internal/updater/    GitHub release check and verified self-replace
 docs/                this spec, API discovery, ADRs
 ```

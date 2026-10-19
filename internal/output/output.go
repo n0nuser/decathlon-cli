@@ -276,7 +276,7 @@ func IssueURL(version, command string, e *api.Error) string {
 	if e.Status != 0 {
 		q.Set("status", fmt.Sprint(e.Status))
 	}
-	q.Set("body_excerpt", e.Msg+"\n"+e.Body)
+	q.Set("report", e.Msg+"\n"+e.Body)
 	return Repo + "/issues/new?" + q.Encode()
 }
 

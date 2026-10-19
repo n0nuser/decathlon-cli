@@ -11,7 +11,7 @@
 
 ---
 
-`decathlon` is an unofficial terminal cli for decathlon.es. you can search with every filter the website has, read product pages, and see which physical stores hold each size. you can also watch products and searches for price and stock changes. it is read-only: no cart, no account, no checkout. it compiles to one static Go binary. output is json by default, so everything pipes into `jq`. `--format pretty` is for humans.
+`decathlon` is an unofficial terminal cli for decathlon.es. you can search with every filter the website has, read product pages, and see which physical stores hold each size. you can also watch products and searches for price and stock changes. it is read-only: no cart, no account, no checkout. it is a single static go binary; the only thing it needs beside it is a local flaresolverr. it prints json unless asked otherwise, ready for `jq`, and `--format pretty` gives tables for a person to read.
 
 [documentation](https://DOCS_DOMAIN/docs) | [command reference](https://DOCS_DOMAIN/docs/reference) | [github](https://github.com/n0nuser/decathlon-cli)
 
@@ -43,7 +43,7 @@ tar xzf "decathlon_${version}_${os}_${arch}.tar.gz" decathlon
 install -m 755 decathlon ~/.local/bin/
 ```
 
-every release ships `checksums.txt` with a github provenance attestation:
+releases come with a `checksums.txt` that github attests was built by this repository's release workflow. check both before installing:
 
 ```bash
 gh release download --repo n0nuser/decathlon-cli --pattern checksums.txt
@@ -97,15 +97,15 @@ the site reports presence only, never quantities
 | `category list / show` | the category tree and the paths `--category` takes |
 | `store list / show` | the 184 stores, nearest first with `--near` |
 | `store stock PRODUCT` | which stores hold each size; `--store` to check yours |
-| `watch add search\|product` | save a watch (silent baseline, `--emit-initial` to report what exists) |
+| `watch add search\|product` | save a watch; its first check is a quiet baseline unless `--emit-initial` |
 | `watch check / run / list / remove / events` | one-shot check, foreground loop, history |
-| `sink list / test` | notification targets from config |
+| `sink list / test` | show the configured notification targets, send one a sample |
 | `config path / list / get / set / unset` | config.toml |
 | `doctor` | config, flaresolverr, session, reachability |
 | `update` | checksum-verified self-update from github releases |
 | `mcp` / `mcp install claude-code\|codex\|cursor` | the read commands as mcp tools for agents |
-| `skills list / get` | embedded notes for agents |
-| `completion bash\|zsh\|fish\|powershell` | shell completion |
+| `skills list / get` | usage notes bundled for agents |
+| `completion bash\|zsh\|fish\|powershell` | completion scripts |
 
 global flags: `--format json|jsonl|pretty|toon`, `--error-format text|json`, `--no-color`, `--no-input`, `--debug`.
 
@@ -156,14 +156,15 @@ type = "ntfy"
 url = "https://ntfy.sh"
 topic = "my-decathlon-alerts"
 
-[sinks.discord]
+[sinks.script]
+command = ["/home/me/bin/on-decathlon-event"]   # gets each event as json on stdin
+type = "exec"
+
+[sinks.chat]
+template = "discord"                            # or "slack"; unset sends the raw event
 type = "webhook"
 url = "https://discord.com/api/webhooks/..."
-template = "discord"
 
-[sinks.script]
-type = "exec"
-command = ["/home/me/bin/on-decathlon-event"]   # event json on stdin
 ```
 
 ## updates
@@ -173,11 +174,22 @@ decathlon update --check
 decathlon update --yes
 ```
 
-interactive commands check for a new stable release at most once a day and ask before updating. scripts, `watch`, `mcp` and `--no-input` never prompt. set `DECATHLON_NO_UPDATE_CHECK=1` to turn the check off. the archive is verified against `checksums.txt` before the binary is replaced. development builds are never replaced.
+used at a terminal, the cli looks for a newer stable version no more than once a day, and asks first. scripts, `watch`, `mcp` and `--no-input` are never interrupted; `DECATHLON_NO_UPDATE_CHECK=1` turns the lookup off entirely. a downloaded archive must match `checksums.txt` before it replaces anything, and builds from source (`dev`) are left alone.
 
 ## exit codes
 
-`0` ok, `1` generic, `2` usage, `4` not found, `5` blocked or rate limited, `6` network or flaresolverr unreachable, `7` the storefront changed (stderr carries a prefilled issue link), `130` interrupted. `3` is reserved: the cli has no accounts.
+| code | when |
+|---|---|
+| `0` | it worked, including "no changes" |
+| `1` | anything else went wrong |
+| `2` | bad input: flag, filter, ref, a store filter on a keyword search |
+| `4` | no such product, model, size, store or watch |
+| `5` | cloudflare refused even a fresh session, or http 429 |
+| `6` | decathlon.es or flaresolverr can't be reached |
+| `7` | a page no longer has the shape the parser expects; an issue link with the details is printed |
+| `130` | ctrl-c |
+
+`3` is kept free for auth, which this cli doesn't do.
 
 ## shell completion
 
@@ -201,14 +213,14 @@ tests never touch the network. they replay real pages captured from the site aga
 
 full docs: [DOCS_DOMAIN/docs](https://DOCS_DOMAIN/docs). the command reference there is generated from the binary (`make docs`).
 
-- [docs/cli-spec.md](docs/cli-spec.md): the interface contract
+- [docs/cli-spec.md](docs/cli-spec.md): what every command accepts and prints
 - [docs/decathlon-api-discovery.md](docs/decathlon-api-discovery.md): how the storefront was read
 - [docs/adr](docs/adr): decisions
 - [AGENTS.md](AGENTS.md): vocabulary and rules for contributors and agents
 
 ## contributing
 
-issues and pull requests are welcome. when the storefront changes, the cli prints a prefilled issue link (exit `7`). that is the most useful report you can file.
+bug reports and pull requests are welcome. if a command exits `7`, the storefront changed under the parser: open the link it prints, which already holds the version, command and page.
 
 ## disclaimer
 

@@ -13,7 +13,7 @@ is unreachable. Exit 5 means Cloudflare refused even a fresh session, so wait an
 
 - stdout holds data, JSON by default. `--format jsonl` prints one element per line. `--format pretty` is for humans only.
 - stderr holds diagnostics. Add `--error-format json` for an envelope: `{code, category, retryable, message, ...}`.
-- Exit codes: 0 ok, 1 generic, 2 usage, 4 not found, 5 blocked or rate limited, 6 network or FlareSolverr, 7 the storefront changed shape, 130 interrupted.
+- Exit codes: 0 fine; 2 your input; 4 nothing by that id; 5 Cloudflare or a 429, wait; 6 can't reach the site or FlareSolverr; 7 the page changed shape; 1 anything else; 130 Ctrl-C.
 - Requests are slow on purpose: about 2 s apart, a few seconds each. Prefer one well-filtered call over many.
 
 ## Finding products
