@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -75,7 +76,11 @@ func installJSON(path, exe string) (string, error) {
 		return "", err
 	}
 	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &doc); err != nil {
+		// UseNumber keeps integers and floats byte-for-byte: the rest of the
+		// file is rewritten, so a big id or a precise float must survive.
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if err := dec.Decode(&doc); err != nil {
 			return "", fmt.Errorf("%s is not valid JSON (%v); not touching it", path, err)
 		}
 	}

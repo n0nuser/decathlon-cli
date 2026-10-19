@@ -58,7 +58,10 @@ func parseRows(b []byte) *Flight {
 				break
 			}
 			n, err := strconv.ParseInt(string(b[i+1:i+comma]), 16, 64)
-			if err != nil {
+			// A length that is not a length at all, or one that runs past
+			// the end, means the page is not text rows but garbage: stop
+			// rather than seek to a negative or out-of-range offset.
+			if err != nil || n < 0 || n > int64(len(b)-(i+comma+1)) {
 				break
 			}
 			i += comma + 1 + int(n)

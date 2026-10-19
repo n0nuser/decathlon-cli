@@ -3,10 +3,12 @@ package api
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -319,5 +321,29 @@ func TestFirstPartyRef(t *testing.T) {
 	p := r.Products[0]
 	if p.Ref != p.ID+"/"+p.ModelID {
 		t.Fatalf("ref %q", p.Ref)
+	}
+}
+
+// Regression (bug 9): PRODUCT and --category accept URLs, and the client used
+// to fetch whatever host they named, so a crafted or copied URL turned it
+// into a fetcher for another site. Only the storefront host is read.
+func TestFetchRefusesForeignHost(t *testing.T) {
+	c := New()
+	// Keep the test hermetic even if the guard regresses: there is no session
+	// and no solver, so only the host check can answer.
+	c.SessionFile = filepath.Join(t.TempDir(), "session.json")
+	c.SolverURL = "http://127.0.0.1:1"
+	if err := c.allow(DefaultBaseURL + "/es/p/_/303295/m8513471"); err != nil {
+		t.Fatalf("storefront url refused: %v", err)
+	}
+	for _, target := range []string{"https://evil.example/es/p/x/1/m2", "http://169.254.169.254/latest/meta-data/"} {
+		if err := c.allow(target); err == nil {
+			t.Errorf("%s allowed", target)
+		}
+		var e *Error
+		_, err := c.Fetch(context.Background(), target, 0)
+		if !errors.As(err, &e) || e.Kind != KindUsage {
+			t.Fatalf("Fetch(%s): want usage error, got %v", target, err)
+		}
 	}
 }

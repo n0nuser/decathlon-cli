@@ -13,6 +13,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/n0nuser/decathlon-cli/internal/store"
 )
 
 func page(t *testing.T, name string) []byte {
@@ -202,6 +205,8 @@ func TestExitCodes(t *testing.T) {
 		{[]string{"search"}, 2},
 		{[]string{"search", "hornillo gas", "--store", "169"}, 2},
 		{[]string{"search", "hornillo gas", "--sort", "cheapest"}, 2},
+		{[]string{"search", "hornillo gas", "--page", "-1"}, 2},
+		{[]string{"search", "hornillo gas", "--limit", "-1"}, 2},
 		{[]string{"product", "show", "303295"}, 2},
 		{[]string{"product", "show", "1/2"}, 4},
 		{[]string{"store", "show", "99999"}, 4},
@@ -224,6 +229,61 @@ func TestExitCodes(t *testing.T) {
 	}
 	if code != 6 || json.Unmarshal([]byte(errs), &env) != nil || env.Category != "network" {
 		t.Fatalf("flaresolverr down: exit %d %s", code, errs)
+	}
+}
+
+// due is the check scheduler: a watch is due once its interval has passed.
+// Regression (bug 11): the grace that absorbs cron jitter used to be a flat
+// minute, so a five-minute watch could fire every four minutes, faster than
+// the documented minimum.
+func TestDue(t *testing.T) {
+	now := time.Now()
+	mk := func(iv time.Duration, last time.Duration) store.Watch {
+		w := store.Watch{Interval: store.Duration(iv)}
+		if last != 0 {
+			w.LastCheckAt = now.Add(-last)
+		}
+		return w
+	}
+	cases := []struct {
+		name string
+		w    store.Watch
+		want bool
+	}{
+		{"never checked", mk(30*time.Minute, 0), true},
+		{"5m watch, 4m in", mk(5*time.Minute, 4*time.Minute), false},
+		{"5m watch, 5m in", mk(5*time.Minute, 5*time.Minute), true},
+		{"30m watch, 28m in", mk(30*time.Minute, 28*time.Minute), false},
+		{"30m watch, 29m in", mk(30*time.Minute, 29*time.Minute), true},
+	}
+	for _, c := range cases {
+		if got := due(c.w, now); got != c.want {
+			t.Errorf("%s: due = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Regression (bug 10): `doctor` is what a person runs when something is
+// broken, but a broken config.toml made setup refuse before any check ran, so
+// the config failure never appeared in the table.
+func TestDoctorReportsBrokenConfig(t *testing.T) {
+	newFake(t)
+	cfgDir := filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "decathlon-cli")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte("flaresolverr_url = \"http://x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, errs, code := run(t, "doctor")
+	if code != 1 {
+		t.Fatalf("exit %d, want 1 (%s)", code, errs)
+	}
+	if !strings.Contains(out, `"name": "config"`) || !strings.Contains(out, `"ok": false`) {
+		t.Fatalf("doctor hid the config failure: %s", out)
+	}
+	if !strings.Contains(errs, "doctor found problems") {
+		t.Fatalf("stderr: %s", errs)
 	}
 }
 

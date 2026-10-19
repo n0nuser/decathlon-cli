@@ -164,6 +164,12 @@ Examples:
 			if pages < 1 {
 				return output.Usagef("--pages must be at least 1")
 			}
+			if page < 0 {
+				return output.Usagef("--page is 0-based and cannot be negative")
+			}
+			if limit < 0 {
+				return output.Usagef("--limit cannot be negative")
+			}
 			p.Page = page
 			var res *api.SearchResult
 			for i := 0; i < pages; i++ {

@@ -120,7 +120,10 @@ func ntfy(ctx context.Context, s config.SinkConfig, e store.Event) error {
 		return err
 	}
 	req.Header.Set("Title", title)
-	req.Header.Set("Tags", "tent")
+	if _, kind, ok := strings.Cut(e.Type, "."); ok {
+		// ntfy tags take letters, digits, - and _; the event kind is one.
+		req.Header.Set("Tags", kind)
+	}
 	if link != "" {
 		req.Header.Set("Click", link)
 	}

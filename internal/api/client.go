@@ -96,6 +96,9 @@ func (c *Client) Abs(path string) string {
 // a copy younger than ttl exists, and stores fresh copies there.
 func (c *Client) Fetch(ctx context.Context, path string, ttl time.Duration) (*Page, error) {
 	target := c.Abs(path)
+	if err := c.allow(target); err != nil {
+		return nil, err
+	}
 	if ttl > 0 {
 		if p := c.cached(target, ttl); p != nil {
 			return p, nil
@@ -126,6 +129,24 @@ func (c *Client) Fetch(ctx context.Context, path string, ttl time.Duration) (*Pa
 		c.store(target, p)
 	}
 	return p, nil
+}
+
+// allow refuses a target that is not on the storefront host. Product and
+// category arguments can be URLs, and a copied or crafted one must not turn
+// the client into a fetcher for another site.
+func (c *Client) allow(target string) error {
+	u, err := url.Parse(target)
+	if err != nil {
+		return Usage("%q is not a URL", target)
+	}
+	host := c.base().Host
+	if host == "" {
+		return nil
+	}
+	if u.Host != "" && !strings.EqualFold(u.Host, host) {
+		return Usage("%s is not on %s, the only host this reads", u.Host, host)
+	}
+	return nil
 }
 
 func (c *Client) notice(s string) {

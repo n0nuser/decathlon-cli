@@ -30,6 +30,24 @@ func TestArgv(t *testing.T) {
 	}
 }
 
+// Regression (bug 12): the installer re-marshalled the whole harness file
+// through float64, so a big id or a precise float came back changed.
+func TestInstallKeepsNumbers(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("CLAUDE_CONFIG_DIR", dir)
+	cfg := filepath.Join(dir, ".claude.json")
+	os.WriteFile(cfg, []byte(`{"n":12345678901234567890,"f":0.30000000000000004,"mcpServers":{}}`), 0o600)
+	if _, err := Install("claude-code", "/bin/decathlon"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(cfg)
+	for _, want := range []string{"12345678901234567890", "0.30000000000000004"} {
+		if !strings.Contains(string(raw), want) {
+			t.Fatalf("%s did not survive: %s", want, raw)
+		}
+	}
+}
+
 func TestInstallKeepsOtherEntries(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", dir)

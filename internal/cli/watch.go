@@ -391,14 +391,33 @@ func (a *App) selectWatches(ctx context.Context, st *store.Store, names []string
 	if force {
 		return ws, nil
 	}
-	var due []store.Watch
+	var out []store.Watch
 	now := time.Now()
 	for _, w := range ws {
-		if w.LastCheckAt.IsZero() || now.Sub(w.LastCheckAt) >= time.Duration(w.Interval)-time.Minute {
-			due = append(due, w)
+		if due(w, now) {
+			out = append(out, w)
 		}
 	}
-	return due, nil
+	return out, nil
+}
+
+// due reports whether a watch should run now. The grace absorbs scheduler
+// jitter, so a cron firing a few seconds early does not skip a whole cycle,
+// but it never pulls the effective interval below minInterval: a five-minute
+// watch still runs no more often than every five minutes.
+func due(w store.Watch, now time.Time) bool {
+	if w.LastCheckAt.IsZero() {
+		return true
+	}
+	iv := time.Duration(w.Interval)
+	grace := time.Minute
+	if iv-grace < minInterval {
+		grace = iv - minInterval
+	}
+	if grace < 0 {
+		grace = 0
+	}
+	return now.Sub(w.LastCheckAt) >= iv-grace
 }
 
 func (a *App) watchCheckCmd() *cobra.Command {

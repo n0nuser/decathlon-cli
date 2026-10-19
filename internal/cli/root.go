@@ -41,6 +41,10 @@ type App struct {
 	flagNoInput     bool
 	flagDebug       bool
 
+	// configErr is why config.toml did not load. `doctor` reports it as a
+	// failed check instead of refusing to run.
+	configErr error
+
 	store *store.Store
 }
 
@@ -149,8 +153,11 @@ func (a *App) setup(cmd *cobra.Command) error {
 	a.Printer = output.Printer{W: a.Stdout, Format: format, Color: output.ColorEnabled(a.flagNoColor, out)}
 
 	a.Paths = config.DefaultPaths()
-	if a.Cfg, err = config.Load(a.Paths.ConfigFile); err != nil && !underCommand(cmd, "config") {
-		return err
+	// A config error is fatal everywhere except where it is the thing being
+	// diagnosed: `config` edits the file, `doctor` reports the failure.
+	a.Cfg, a.configErr = config.Load(a.Paths.ConfigFile)
+	if a.configErr != nil && !underCommand(cmd, "config") && cmd.Name() != "doctor" {
+		return a.configErr
 	}
 	c := api.New()
 	c.SolverURL = a.Cfg.SolverURL()

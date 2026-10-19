@@ -263,7 +263,7 @@ Exit 1 if any check fails.`,
 				}
 				rep.Checks = append(rep.Checks, c)
 			}
-			add("config", nil, a.Paths.ConfigFile)
+			add("config", a.configErr, a.Paths.ConfigFile)
 			for _, name := range sortedNames(a.Cfg.Sinks) {
 				add("sink "+name, sink.Validate(name, a.Cfg.Sinks[name]), a.Cfg.Sinks[name].Type)
 			}
