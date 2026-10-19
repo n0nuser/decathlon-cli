@@ -1,0 +1,30 @@
+name: npm publish
+
+on:
+  push:
+    tags: ["v*"]
+
+# Trusted Publishing (OIDC): no NPM_TOKEN. npm exchanges the GitHub id token
+# for a short-lived publish credential and attaches provenance automatically,
+# so there is no --provenance and no NODE_AUTH_TOKEN here.
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing needs npm 11.5.1+; the node 22 image ships npm 10.
+      - run: npm install -g npm@latest
+      - name: sync the version from the tag
+        working-directory: npm
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+      - name: publish
+        working-directory: npm
+        run: npm publish --access public

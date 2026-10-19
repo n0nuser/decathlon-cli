@@ -41,7 +41,7 @@ pin a release with `VERSION` (the tag without the leading `v`), and change the t
 |---|---|
 | curl \| sh | `curl -fsSL https://raw.githubusercontent.com/n0nuser/decathlon-cli/main/scripts/install.sh \| sh` |
 | go install | `go install github.com/n0nuser/decathlon-cli/cmd/decathlon@latest` |
-| npx (npm wrapper in [`npm/`](npm), publishing gated on `NPM_TOKEN`) | `npx decathlon-cli search "tienda campaña"` |
+| npx (npm wrapper in [`npm/`](npm), published with npm Trusted Publishing) | `npx decathlon-cli search "tienda campaña"` |
 | release binary | `decathlon_<version>_<os>_<arch>.tar.gz` from [releases](https://github.com/n0nuser/decathlon-cli/releases), verified below |
 | from source | `git clone https://github.com/n0nuser/decathlon-cli && cd decathlon-cli && make install` |
 
@@ -61,7 +61,13 @@ tar xzf "decathlon_${version}_${os}_${arch}.tar.gz" decathlon
 install -m 755 decathlon ~/.local/bin/
 ```
 
-homebrew, scoop and aur are planned; they need a tap repository, a scoop bucket and an aur ssh key (plus the `NPM_TOKEN` above) before goreleaser can publish them. see [AGENTS.md](AGENTS.md).
+publishing to npm runs in [`.github/workflows/npm-publish.yml`](.github/workflows/npm-publish.yml) with npm Trusted Publishing (OIDC): on a `v*` tag it syncs the version from the tag and runs `npm publish --access public` with no token. one npm-side step is left for the account owner: after creating the package on npmjs.com, open it → **Settings → Trusted Publishers → add a GitHub Actions trusted publisher** with owner `n0nuser`, repository `decathlon-cli`, workflow `npm-publish.yml`, environment empty. until that exists the workflow fails; it is separate from the binary `release.yml`, so releases are unaffected.
+
+homebrew, scoop and aur are ready but commented out in [`.goreleaser.yaml`](.goreleaser.yaml), because enabling them without these prerequisites would break `release.yml`:
+
+- homebrew: a public `homebrew-tap` repository and the `HOMEBREW_TAP_GITHUB_TOKEN` secret.
+- scoop: a public `scoop-bucket` repository and the `SCOOP_BUCKET_GITHUB_TOKEN` secret.
+- aur: an AUR account with the `decathlon-cli-bin` package and the `AUR_SSH_PRIVATE_KEY` secret.
 
 ## why
 
