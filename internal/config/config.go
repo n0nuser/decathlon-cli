@@ -14,6 +14,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/n0nuser/decathlon-cli/internal/api"
+	"github.com/n0nuser/decathlon-cli/internal/atomicfile"
 )
 
 const appDir = "decathlon-cli"
@@ -118,7 +119,7 @@ func Save(path string, c Config) error {
 	if err != nil {
 		return err
 	}
-	return api.WriteFileAtomic(path, raw, 0o600)
+	return atomicfile.Write(path, raw, 0o600)
 }
 
 // SolverURL picks FLARESOLVERR_URL, then config, then the default.

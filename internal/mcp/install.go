@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/n0nuser/decathlon-cli/internal/api"
+	"github.com/n0nuser/decathlon-cli/internal/atomicfile"
 )
 
 // Harnesses that `mcp install` knows.
@@ -107,7 +107,7 @@ func installJSON(path, exe string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return action, api.WriteFileAtomic(path, append(out, '\n'), 0o600)
+	return action, atomicfile.Write(path, append(out, '\n'), 0o600)
 }
 
 // installTOML edits ~/.codex/config.toml as text so comments and ordering
@@ -136,7 +136,7 @@ func installTOML(path, exe string) (string, error) {
 			text += "\n"
 		}
 		text += "\n[mcp_servers.decathlon]\n" + cmdLine + "\n" + argsLine + "\n"
-		return "added", api.WriteFileAtomic(path, []byte(text), 0o600)
+		return "added", atomicfile.Write(path, []byte(text), 0o600)
 	}
 	end := len(lines)
 	for i := start + 1; i < len(lines); i++ {
@@ -178,5 +178,5 @@ func installTOML(path, exe string) (string, error) {
 	if !changed {
 		return "unchanged", nil
 	}
-	return "updated", api.WriteFileAtomic(path, []byte(strings.Join(lines, "\n")), 0o600)
+	return "updated", atomicfile.Write(path, []byte(strings.Join(lines, "\n")), 0o600)
 }

@@ -21,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/n0nuser/decathlon-cli/internal/atomicfile"
 )
 
 const (
@@ -222,9 +224,9 @@ func isChallenge(resp *http.Response, body []byte) bool {
 }
 
 func excerpt(b []byte) string {
-	s := string(b)
-	if len(s) > 300 {
-		s = s[:300]
+	s := strings.ToValidUTF8(string(b), "\uFFFD")
+	if r := []rune(s); len(r) > 300 {
+		s = string(r[:300])
 	}
 	return s
 }
@@ -294,32 +296,7 @@ func (c *Client) saveSession() error {
 	if err != nil {
 		return err
 	}
-	return WriteFileAtomic(c.SessionFile, raw, 0o600)
-}
-
-// WriteFileAtomic writes through a temp file and a rename, then forces the
-// mode so a relaxed umask cannot widen it.
-func WriteFileAtomic(path string, data []byte, mode os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tmp.Name())
-	if _, err := tmp.Write(data); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
+	return atomicfile.Write(c.SessionFile, raw, 0o600)
 }
 
 // ForgetSession deletes the stored session so the next request mints.
@@ -478,6 +455,6 @@ func (c *Client) store(target string, p *Page) {
 	}
 	raw, err := json.Marshal(cacheEntry{URL: p.URL, At: time.Now(), Body: p.Body})
 	if err == nil {
-		_ = WriteFileAtomic(c.cachePath(target), raw, 0o600)
+		_ = atomicfile.Write(c.cachePath(target), raw, 0o600)
 	}
 }
