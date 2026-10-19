@@ -1,0 +1,105 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+@source '../node_modules/fumadocs-ui/dist/**/*.js';
+
+@theme {
+  --brand-50: #eef4ff;
+  --brand-100: #dce7ff;
+  --brand-200: #bcd0ff;
+  --brand-300: #93b1ff;
+  --brand-400: #648bff;
+  --brand-500: #3d68f2;
+  --brand-600: #2a4fd6;
+  --brand-700: #2340ab;
+  --brand-800: #223a89;
+  --brand-900: #21356f;
+  --brand-950: #16224a;
+}
+
+:root {
+  color-scheme: light;
+
+  --color-fd-background: #f7f9fc;
+  --color-fd-foreground: #0f1524;
+  --color-fd-card: #ffffff;
+  --color-fd-popover: #ffffff;
+  --color-fd-muted: #eff2f8;
+  --color-fd-muted-foreground: #56617a;
+  --color-fd-border: #dde3ee;
+  --color-fd-accent: #e4ebfd;
+  --color-fd-accent-foreground: #2340ab;
+  --color-fd-primary: #2a4fd6;
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-ring: #2a4fd6;
+  --color-fd-secondary: #eff2f8;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --color-fd-background: #070b16;
+  --color-fd-foreground: #e9eefb;
+  --color-fd-card: #0d1424;
+  --color-fd-popover: #0d1424;
+  --color-fd-muted: #0d1424;
+  --color-fd-muted-foreground: #a7b2cd;
+  --color-fd-border: #212d48;
+  --color-fd-accent: #16223c;
+  --color-fd-accent-foreground: #93b1ff;
+  --color-fd-primary: #648bff;
+  --color-fd-primary-foreground: #060b16;
+  --color-fd-ring: #93b1ff;
+  --color-fd-secondary: #121b30;
+}
+
+::selection {
+  background-color: rgb(61 104 242 / 22%);
+}
+
+.dark ::selection {
+  background-color: rgb(100 139 255 / 30%);
+}
+
+.prose {
+  --tw-prose-body: color-mix(in oklab, var(--color-fd-foreground) 85%, transparent);
+  --tw-prose-headings: color-mix(in oklab, var(--color-fd-foreground) 85%, transparent);
+  --tw-prose-links: var(--color-fd-primary);
+  --tw-prose-code: var(--color-fd-primary);
+}
+
+.prose :where(code):not(:where([class~='not-prose'], [class~='not-prose'] *)) {
+  border: none;
+  background-color: color-mix(in oklab, var(--color-fd-primary) 10%, transparent);
+}
+
+#nd-sidebar {
+  background-color: #ffffff;
+  border-color: transparent;
+}
+
+.dark #nd-sidebar {
+  --color-fd-muted-foreground: #a7b2cd;
+  background-color: #0d1424;
+}
+
+@layer utilities {
+  button[data-search-full] {
+    background-color: var(--color-fd-background);
+  }
+
+  figure.shiki {
+    background-color: var(--color-fd-card);
+  }
+}
+
+/* Short, physical transitions, dropped when the reader asks for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  a,
+  button {
+    transition:
+      color 150ms cubic-bezier(0.175, 0.885, 0.32, 1.1),
+      background-color 150ms cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  }
+}
