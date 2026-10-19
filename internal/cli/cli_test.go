@@ -51,12 +51,14 @@ type fake struct {
 
 func newFake(t *testing.T) *fake {
 	f := &fake{t: t, pages: map[string][]byte{
-		"/es/search?Ntt=hornillo+gas":                                                page(t, "listing_keyword"),
-		"/es/search?Ntt=hornillo+gas&from=40&size=40":                                page(t, "listing_keyword"),
-		"/es/deportes/camping/tiendas-campana":                                       page(t, "listing_redirect"),
+		"/es/search?Ntt=hornillo+gas":                 page(t, "listing_keyword"),
+		"/es/search?Ntt=hornillo+gas&from=40&size=40": page(t, "listing_keyword"),
+		"/es/search":                           page(t, "listing_keyword"),
+		"/es/deportes/camping":                 page(t, "home"),
+		"/es/deportes/camping/tiendas-campana": page(t, "listing_redirect"),
 		"/es/p/tienda-de-campana-2-personas-quechua-mh100/303295/c251c98c74m8513471": page(t, "product_mh100"),
-		"/es/store-locator":                                                          page(t, "store_locator"),
-		"/es/":                                                                       page(t, "home"),
+		"/es/store-locator": page(t, "store_locator"),
+		"/es/":              page(t, "home"),
 	}, redirect: map[string]string{
 		"/es/search?Ntt=tienda+campa%C3%B1a": "/es/deportes/camping/tiendas-campana?opeco=opeco:LiP_search_&type=opeco",
 		"/es/p/_/303295/m8513471":            "/es/p/tienda-de-campana-2-personas-quechua-mh100/303295/c251c98c74m8513471",
