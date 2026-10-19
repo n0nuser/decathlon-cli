@@ -1,7 +1,7 @@
 # Handoff report
 
 Branch `feat/initial`, worktree `/home/pablo/.herdr/worktrees/decathlon-cli/feat-initial`.
-Version string in the captures below: `2286f9b` (`make build`).
+Version string in the captures below: `07e2398` (`make build`).
 
 ## Summary
 
@@ -42,6 +42,7 @@ Five fixes, each with a regression test, plus two smaller ones:
 | 12 | M | `mcp install` re-read harness configs through `float64`, changing big ids and precise floats | `TestInstallKeepsNumbers` |
 | — | L | `search --page -1` / `--limit -1` were accepted and ignored | `TestExitCodes` |
 | — | L | `ntfy` notifications carried a hardcoded tag | live-checked |
+| 13 | H | `--page` was a 0-based index while the site, the header and the hint counted from 1, so `--page 2` fetched the third page and page 2 looked skipped | `TestSearchPageNumbering`, `TestWatchSearchPagesAreOneBased`, `TestBuildPageNumbers` |
 
 Documented, not changed: the `watch events --since` string comparison at a second boundary; the
 64 KiB challenge-size heuristic; `config set` losing comments when it rewrites the file.
@@ -63,8 +64,8 @@ $ make docs-check                 # ok
 $ (cd docs-site && npm install && npm run build)   # ok
 ```
 
-**Test count: 37 test functions** (up from 32), including 20 regression tests named after the bugs
-in the two review documents. Tests replay real captured pages from `internal/api/testdata/*.html.gz`
+**Test count: 40 test functions**, including 15 regression tests named after the bugs in the
+review documents (bugs 1–13). Tests replay real captured pages from `internal/api/testdata/*.html.gz`
 and drive the CLI against `httptest` fakes of the storefront and FlareSolverr; nothing touches the
 network.
 
@@ -91,7 +92,6 @@ network.
   This session's commits carry none.
 
 ## Literal outputs
-
 `decathlon doctor` on this machine (FlareSolverr 3.5.2 running locally):
 
 ```text
@@ -195,7 +195,7 @@ mp/cec4b96f-b576-4635-98bf-83157a1f3e2c/c5    149,00 € (-21%)   SKANDIKA  Tien
 mp/23c1bf1e-004f-4f67-b96e-ba6f3b236ea8/c30   399,00 € (-15%)   SKANDIKA  Tienda de campaña tipo túnel - Hafslo 5 XL Sleeper Prot…  5.0 (1)     mkt
 331788/8641816                                289,99 €          SIMOND    Tienda de alpinismo para dos personas Simond Makalu T2    4.6 (21)    
 363415/8938357                                649,99 €          QUECHUA   Tienda campaña hinchable 6 personas 3 habitaciones Fres…  4.8 (87)    
-more: --page 1
+more: --page 2
 ```
 
 ### `decathlon store stock 303295/8513471 --near 42.81,-1.64 --limit 4 --format pretty`
