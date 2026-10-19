@@ -64,13 +64,20 @@ Examples:
 			}
 			return a.Printer.Print(v)
 		}},
-		&cobra.Command{Use: "set KEY VALUE", Short: "Set one key", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
-			return a.configWrite(args[0], args[1], false)
-		}},
+		a.configSetCmd(),
 		&cobra.Command{Use: "unset KEY", Short: "Remove one key", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 			return a.configWrite(args[0], "", true)
 		}},
 	)
+	return cmd
+}
+
+func (a *App) configSetCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "set KEY VALUE", Short: "Set one key", Args: cobra.ExactArgs(2), RunE: func(cmd *cobra.Command, args []string) error {
+		return a.configWrite(args[0], args[1], false)
+	}}
+	// Stop flag parsing at KEY, so negative values (a longitude) are values.
+	cmd.Flags().SetInterspersed(false)
 	return cmd
 }
 
@@ -276,8 +283,8 @@ Exit 1 if any check fails.`,
 				add("session", errors.New("none stored, and flaresolverr is down so none can be minted"), "")
 			}
 			if rep.OK {
-				_, err := a.Client.Stores(ctx)
-				add("decathlon.es", err, "store locator fetched with the stored session")
+				_, err := a.Client.Fetch(ctx, "/es/", 0)
+				add("decathlon.es", err, "home page fetched over net/http with the session")
 			}
 			if err := a.Printer.Print(rep); err != nil {
 				return err

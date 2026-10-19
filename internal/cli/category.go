@@ -49,7 +49,7 @@ func prune(cs []api.Category, depth int) []api.Category {
 type subcategory struct {
 	Name  string `json:"name"`
 	Path  string `json:"path"`
-	Count int    `json:"count"`
+	Count int    `json:"count,omitempty"` // unknown for menu-only sections
 }
 
 type categoryView struct {
@@ -61,11 +61,19 @@ type categoryView struct {
 
 func (v categoryView) Pretty(w io.Writer, color bool) {
 	if v.Category != nil {
-		fmt.Fprintln(w, output.Bold(output.Clean(fmt.Sprintf("%s · %d products", v.Category.Name, v.Total)), color))
+		head := v.Category.Name
+		if v.Total > 0 {
+			head += fmt.Sprintf(" · %d products", v.Total)
+		}
+		fmt.Fprintln(w, output.Bold(output.Clean(head), color))
 	}
 	rows := [][]string{}
 	for _, s := range v.Subcategories {
-		rows = append(rows, []string{s.Name, fmt.Sprint(s.Count), output.Dim(s.Path, color)})
+		n := ""
+		if s.Count > 0 {
+			n = fmt.Sprint(s.Count)
+		}
+		rows = append(rows, []string{s.Name, n, output.Dim(s.Path, color)})
 	}
 	output.Table(w, color, []string{"SUBCATEGORY", "PRODUCTS", "PATH"}, rows)
 }
@@ -107,6 +115,9 @@ Examples:
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			r, err := a.Client.Filters(cmd.Context(), api.SearchParams{Category: args[0]})
+			if api.IsLandingPage(err) {
+				return a.categoryFromMenu(cmd, args[0])
+			}
 			if err != nil {
 				return err
 			}
@@ -124,4 +135,35 @@ Examples:
 	}
 	cmd.AddCommand(list, show)
 	return cmd
+}
+
+// categoryFromMenu answers `category show` for landing pages, which list no
+// products: their subcategories come from the navigation menu instead.
+func (a *App) categoryFromMenu(cmd *cobra.Command, path string) error {
+	cats, err := a.Client.Categories(cmd.Context())
+	if err != nil {
+		return err
+	}
+	want := strings.TrimPrefix(strings.Trim(path, "/"), "es/")
+	var find func(cs []api.Category) *api.Category
+	find = func(cs []api.Category) *api.Category {
+		for i := range cs {
+			if cs[i].Path == want {
+				return &cs[i]
+			}
+			if c := find(cs[i].Children); c != nil {
+				return c
+			}
+		}
+		return nil
+	}
+	c := find(cats)
+	if c == nil {
+		return &api.Error{Kind: api.KindNotFound, Msg: fmt.Sprintf("%s lists no products and is not in the menu; see `decathlon category list --depth 3`", want)}
+	}
+	v := categoryView{Category: &api.CategoryRef{ID: c.ID, Name: c.Name, Path: c.Path}, URL: a.Client.Abs("/es/" + c.Path), Subcategories: []subcategory{}}
+	for _, ch := range c.Children {
+		v.Subcategories = append(v.Subcategories, subcategory{Name: ch.Name, Path: ch.Path})
+	}
+	return a.Printer.Print(v)
 }

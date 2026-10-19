@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"sort"
@@ -216,6 +217,11 @@ func ParseListing(p *Page) (*SearchResult, error) {
 	}
 	hits := f.Find(func(m map[string]any) bool { return has(m, "totalNumberOfProducts", "products", "filters") })
 	if len(hits) == 0 {
+		if u, err := url.Parse(p.URL); err == nil && !strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/search") && len(f.Find(func(m map[string]any) bool { return has(m, "menuItem") })) > 0 {
+			// Top-level sections (deportes/camping, mujer...) are editorial
+			// landing pages with no product list.
+			return nil, &Error{Kind: KindUsage, Msg: fmt.Sprintf("%s is a landing page without a product list. Pick a subcategory: `decathlon category show %s`", u.Path, strings.TrimPrefix(strings.Trim(u.Path, "/"), "es/")), Endpoint: u.Path, Status: landingPage}
+		}
 		return nil, apiChanged("listing page has no product grid (totalNumberOfProducts/products/filters)")
 	}
 	var w wireListing
@@ -379,7 +385,16 @@ var DeliveryValues = map[string]string{"24h": "ud-0-24", "48h": "ud-0-48"}
 
 const (
 	resolveTTL = 10 * time.Minute // unfiltered page used to resolve filter values
+	// landingPage marks the usage error ParseListing returns for a section
+	// page with no grid, so `category show` can fall back to the menu.
+	landingPage = -1
 )
+
+// IsLandingPage reports whether err is ParseListing's "no product list here".
+func IsLandingPage(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Status == landingPage
+}
 
 func (p SearchParams) modified() bool {
 	return len(p.Filters) > 0 || p.MinPrice > 0 || p.MaxPrice > 0 || p.Sort != "" || p.Page > 0

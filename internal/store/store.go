@@ -30,10 +30,27 @@ type Watch struct {
 	Kind        string          `json:"kind"`
 	Target      json.RawMessage `json:"target"`
 	Sinks       []string        `json:"sinks"`
-	Interval    time.Duration   `json:"interval"`
+	Interval    Duration        `json:"interval"`
 	CreatedAt   time.Time       `json:"created_at"`
 	LastCheckAt time.Time       `json:"last_check_at,omitzero"`
 	Baselined   bool            `json:"baselined"`
+}
+
+// Duration prints as "30m0s" rather than nanoseconds.
+type Duration time.Duration
+
+func (d Duration) String() string { return time.Duration(d).String() }
+
+func (d Duration) MarshalJSON() ([]byte, error) { return json.Marshal(d.String()) }
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	v, err := time.ParseDuration(s)
+	*d = Duration(v)
+	return err
 }
 
 // Seen is the last state of one key (a product tile, or one SKU) under a watch.
@@ -117,7 +134,7 @@ func (s *Store) AddWatch(ctx context.Context, w *Watch) error {
 	sinks, _ := json.Marshal(w.Sinks)
 	w.CreatedAt = time.Now().UTC()
 	res, err := s.db.ExecContext(ctx, `INSERT INTO watches(name, kind, target, sinks, interval_sec, created_at) VALUES (?,?,?,?,?,?)`,
-		w.Name, w.Kind, string(w.Target), string(sinks), int64(w.Interval/time.Second), w.CreatedAt.Format(ts))
+		w.Name, w.Kind, string(w.Target), string(sinks), int64(time.Duration(w.Interval)/time.Second), w.CreatedAt.Format(ts))
 	if err != nil {
 		if s.exists(ctx, w.Name) {
 			return ErrExists
@@ -162,7 +179,7 @@ func (s *Store) Watches(ctx context.Context) ([]Watch, error) {
 		}
 		w.Target = json.RawMessage(target)
 		_ = json.Unmarshal([]byte(sinks), &w.Sinks)
-		w.Interval = time.Duration(iv) * time.Second
+		w.Interval = Duration(time.Duration(iv) * time.Second)
 		w.CreatedAt, _ = time.Parse(ts, created)
 		if last != "" {
 			w.LastCheckAt, _ = time.Parse(ts, last)

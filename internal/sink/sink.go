@@ -183,7 +183,7 @@ func run(ctx context.Context, s config.SinkConfig, e store.Event) error {
 		argv[i] = home(a)
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Stdin = bytes.NewReader(raw)
+	cmd.Stdin = bytes.NewReader(append(raw, '\n'))
 	cmd.Env = append(os.Environ(), "DECATHLON_EVENT_TYPE="+e.Type, "DECATHLON_WATCH="+e.Watch)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

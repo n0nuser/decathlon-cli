@@ -105,7 +105,7 @@ func (a *App) addWatch(ctx context.Context, kind string, target any, f watchAddF
 		return err
 	}
 	raw, _ := json.Marshal(target)
-	w := store.Watch{Name: f.name, Kind: kind, Target: raw, Sinks: f.notify, Interval: iv}
+	w := store.Watch{Name: f.name, Kind: kind, Target: raw, Sinks: f.notify, Interval: store.Duration(iv)}
 	if w.Sinks == nil {
 		w.Sinks = []string{}
 	}
@@ -394,7 +394,7 @@ func (a *App) selectWatches(ctx context.Context, st *store.Store, names []string
 	var due []store.Watch
 	now := time.Now()
 	for _, w := range ws {
-		if w.LastCheckAt.IsZero() || now.Sub(w.LastCheckAt) >= w.Interval-time.Minute {
+		if w.LastCheckAt.IsZero() || now.Sub(w.LastCheckAt) >= time.Duration(w.Interval)-time.Minute {
 			due = append(due, w)
 		}
 	}
