@@ -1,0 +1,5 @@
+node_modules/
+decathlon
+decathlon.exe
+.install-*/
+*.tgz
