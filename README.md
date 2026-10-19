@@ -15,6 +15,17 @@
 
 [documentation](https://DOCS_DOMAIN/docs) | [command reference](https://DOCS_DOMAIN/docs/reference) | [github](https://github.com/n0nuser/decathlon-cli)
 
+## for AI agents
+
+register the read-only commands as mcp tools, or read the notes bundled for agents:
+
+```bash
+decathlon mcp install claude-code     # also: codex, cursor
+decathlon skills get decathlon-usage  # or: decathlon skills list
+```
+
+the server exposes `search`, `product_show`, `store_list`, `store_stock`, `category_list`, `watch_list` and `watch_check`; each returns the command's json.
+
 ## why
 
 when you are buying gear, the real question is often not "how much" but "which store near me has it in my size, today". the website answers that one product and one store at a time. this cli answers it in one command: for a whole listing filtered to a store, or for every store holding each size of a product. it can keep checking for you and tell you when a size lands in your store or a price drops. scripts, agents (there is an mcp server) and shell pipelines all read the same json.
@@ -208,6 +219,14 @@ make check     # vet, staticcheck, tests, gofmt
 ```
 
 tests never touch the network. they replay real pages captured from the site against local fakes of the storefront and flaresolverr.
+
+one live smoke test is opt-in. with flaresolverr running and a session already minted (or mintable), it does a real search:
+
+```bash
+DECATHLON_LIVE_TEST=1 go test ./internal/cli -run TestLiveSearch -v
+```
+
+without the variable it is skipped, so `go test ./...` stays offline.
 
 ## documentation
 
