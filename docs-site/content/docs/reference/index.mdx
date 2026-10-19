@@ -1,0 +1,30 @@
+---
+title: Command reference
+description: Every command and flag, generated from the binary.
+---
+
+The pages under here are generated from the CLI's own command tree by `cmd/docsgen`, so the
+flags documented are the flags the binary has. Regenerating and diffing is what stops this
+reference drifting from the code.
+
+To regenerate after changing a command:
+
+```bash
+go run ./cmd/docsgen
+```
+
+<Callout type="info" title="Do not edit the generated pages by hand">
+  Changes to them are overwritten. Edit the command's `Short`, `Long` and flag usage strings in
+  Go instead; those are the source.
+</Callout>
+
+## Shape of the command set
+
+Commands are noun-verb: the noun is the thing, the verb is what you do to it.
+
+```bash
+decathlon search "tienda campaña"
+decathlon product show 303295/8513471
+decathlon store stock 303295/8513471 --near 40.4168,-3.7038
+decathlon watch add product 303295/8513471 --store 169 --name tent
+```

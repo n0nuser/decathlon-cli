@@ -1,0 +1,18 @@
+{
+  "title": "Command reference",
+  "description": "Every command and flag, generated from the binary",
+  "pages": [
+    "index",
+    "category",
+    "config",
+    "doctor",
+    "mcp",
+    "product",
+    "search",
+    "sink",
+    "skills",
+    "store",
+    "update",
+    "watch"
+  ]
+}
