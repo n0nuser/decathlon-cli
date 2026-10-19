@@ -2,344 +2,13 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 )
-
-// Product is one listing tile: a model (one colour) of a product group.
-type Product struct {
-	Ref             string   `json:"ref"`      // pass to product show, store stock and watch add product
-	ID              string   `json:"id"`       // product group ("supermodel") id, the number in /p/.../<id>/
-	ModelID         string   `json:"model_id"` // the colour shown
-	SkuID           string   `json:"sku_id,omitempty"`
-	Title           string   `json:"title"`
-	Brand           string   `json:"brand"`
-	Price           float64  `json:"price"`
-	Currency        string   `json:"currency"`
-	ReferencePrice  float64  `json:"reference_price,omitempty"` // the crossed-out price while discounted
-	DiscountPercent float64  `json:"discount_percent,omitempty"`
-	Rating          float64  `json:"rating,omitempty"`
-	Reviews         int      `json:"reviews,omitempty"`
-	AvailableOnline bool     `json:"available_online"`
-	Marketplace     bool     `json:"marketplace"` // sold by a third-party seller, not Decathlon
-	Seller          string   `json:"seller,omitempty"`
-	Sizes           []string `json:"sizes,omitempty"`
-	URL             string   `json:"url"`
-	Image           string   `json:"image,omitempty"`
-}
-
-// SearchResult is one page of a keyword search or a category listing.
-type SearchResult struct {
-	Query       string          `json:"query,omitempty"`
-	Category    *CategoryRef    `json:"category,omitempty"`
-	URL         string          `json:"url"` // what the site served, after redirects
-	Total       int             `json:"total"`
-	Page        int             `json:"page"` // 1-based page number, as the site and the header show it
-	Pages       int             `json:"pages"`
-	PerPage     int             `json:"per_page"`
-	Applied     []AppliedFilter `json:"applied_filters"`
-	Products    []Product       `json:"products"`
-	Suggestions []string        `json:"suggestions,omitempty"`
-
-	Facets []Facet       `json:"-"`
-	Sorts  []SortOption  `json:"-"`
-	mode   listingMode   `json:"-"`
-	base   *url.URL      `json:"-"`
-	rangeU *rangeURLSpec `json:"-"`
-}
-
-type CategoryRef struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	Path string `json:"path"` // e.g. deportes/camping/tiendas-campana
-}
-
-type AppliedFilter struct {
-	Facet string `json:"facet"`
-	ID    string `json:"id,omitempty"`
-	Label string `json:"label"`
-}
-
-// Facet is one filter the page offers, with the values it offers for it.
-type Facet struct {
-	ID     string       `json:"id"`
-	Label  string       `json:"label,omitempty"`
-	Kind   string       `json:"kind"` // singleMatch, multiMatch, span
-	Values []FacetValue `json:"values,omitempty"`
-	Min    float64      `json:"min,omitempty"`
-	Max    float64      `json:"max,omitempty"`
-}
-
-type FacetValue struct {
-	ID      string `json:"id,omitempty"`
-	Label   string `json:"label"`
-	Count   int    `json:"count"`
-	Applied bool   `json:"applied,omitempty"`
-	url     string
-}
-
-type SortOption struct {
-	ID      string `json:"id"`
-	Applied bool   `json:"applied"`
-	url     string
-}
-
-type listingMode int
-
-const (
-	modeKeyword listingMode = iota
-	modeCategory
-)
-
-// wire shapes, as the flight payload carries them
-
-type wireListing struct {
-	Category *struct {
-		ID   string `json:"id"`
-		URL  string `json:"url"`
-		Name string `json:"name"`
-	} `json:"category"`
-	Search *struct {
-		Terms       []string `json:"terms"`
-		Suggestions struct {
-			Terms []struct {
-				Label string `json:"label"`
-			} `json:"terms"`
-		} `json:"suggestions"`
-	} `json:"search"`
-	Filters struct {
-		Applied []struct {
-			CategoryID string `json:"categoryId"`
-			ID         string `json:"id"`
-			Label      string `json:"label"`
-		} `json:"applied"`
-		Items []wireFacet `json:"items"`
-	} `json:"filters"`
-	Products   []wireProduct `json:"products"`
-	Pagination struct {
-		Current        int `json:"current"`
-		Total          int `json:"total"`
-		NbItemsPerPage int `json:"nbItemsPerPage"`
-	} `json:"pagination"`
-	Sorts []struct {
-		ID        string      `json:"id"`
-		URL       string      `json:"url"`
-		IsApplied lenientBool `json:"isApplied"`
-	} `json:"sorts"`
-	TotalNumberOfProducts int `json:"totalNumberOfProducts"`
-}
-
-type wireFacet struct {
-	ID     string          `json:"id"`
-	Kind   string          `json:"kind"`
-	Label  *string         `json:"label"`
-	Values json.RawMessage `json:"values"`
-	Range  *struct {
-		Min float64      `json:"min"`
-		Max float64      `json:"max"`
-		URL rangeURLSpec `json:"url"`
-	} `json:"range"`
-}
-
-type rangeURLSpec struct {
-	Key     string `json:"key"`
-	Pattern string `json:"pattern"`
-}
-
-type wireFacetValue struct {
-	ID        *string     `json:"id"`
-	Count     int         `json:"count"`
-	Label     string      `json:"label"`
-	URL       string      `json:"url"`
-	IsApplied lenientBool `json:"isApplied"`
-}
-
-type wireProduct struct {
-	ID           string          `json:"id"`
-	SupermodelID string          `json:"supermodelId"`
-	SkuID        string          `json:"skuId"`
-	Label        string          `json:"label"`
-	URL          string          `json:"url"`
-	Images       json.RawMessage `json:"images"`
-	Models       []struct {
-		ID              string          `json:"id"`
-		SkuID           string          `json:"skuId"`
-		Brand           string          `json:"brand"`
-		Label           string          `json:"label"`
-		Price           json.RawMessage `json:"price"`
-		AvailableOnline bool            `json:"availableOnline"`
-		AvailableSizes  json.RawMessage `json:"availableSizes"`
-		URL             string          `json:"url"`
-		Seller          *struct {
-			ID   string `json:"id"`
-			Type string `json:"type"`
-		} `json:"seller"`
-	} `json:"models"`
-	Reviews *struct {
-		Count    int     `json:"count"`
-		Notation float64 `json:"notation"`
-	} `json:"reviews"`
-}
-
-// lenientBool accepts true/false and treats anything else (null, the
-// "$undefined" token) as false.
-type lenientBool bool
-
-func (b *lenientBool) UnmarshalJSON(raw []byte) error {
-	*b = string(raw) == "true"
-	return nil
-}
-
-// money is the price object both listings and product pages use.
-type money struct {
-	Currencies struct {
-		Main struct {
-			ValueWithTaxes          float64 `json:"valueWithTaxes"`
-			ReferenceValueWithTaxes float64 `json:"referenceValueWithTaxes"`
-			DiscountPercentage      float64 `json:"discountPercentage"`
-			Currency                string  `json:"currency"`
-		} `json:"main"`
-	} `json:"currencies"`
-}
-
-// ParseListing decodes a search or category page.
-func ParseListing(p *Page) (*SearchResult, error) {
-	f, err := ParseFlight(p.Body)
-	if err != nil {
-		return nil, err
-	}
-	hits := f.Find(func(m map[string]any) bool { return has(m, "totalNumberOfProducts", "products", "filters") })
-	if len(hits) == 0 {
-		if u, err := url.Parse(p.URL); err == nil && !strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/search") && len(f.Find(func(m map[string]any) bool { return has(m, "menuItem") })) > 0 {
-			// Top-level sections (deportes/camping, mujer...) are editorial
-			// landing pages with no product list.
-			return nil, &Error{Kind: KindUsage, Msg: fmt.Sprintf("%s is a landing page without a product list. Pick a subcategory: `decathlon category show %s`", u.Path, strings.TrimPrefix(strings.Trim(u.Path, "/"), "es/")), Endpoint: u.Path, Status: landingPage}
-		}
-		return nil, apiChanged("listing page has no product grid (totalNumberOfProducts/products/filters)")
-	}
-	var w wireListing
-	if err := decodeInto(hits[0], &w); err != nil {
-		return nil, apiChanged("listing grid changed shape: %v", err)
-	}
-	u, err := url.Parse(p.URL)
-	if err != nil {
-		return nil, err
-	}
-	r := &SearchResult{URL: p.URL, base: u, Total: w.TotalNumberOfProducts, Page: w.Pagination.Current + 1, Pages: w.Pagination.Total, PerPage: w.Pagination.NbItemsPerPage, Applied: []AppliedFilter{}, Products: []Product{}}
-	if strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/search") {
-		r.mode = modeKeyword
-		r.Query = u.Query().Get("Ntt")
-	} else {
-		r.mode = modeCategory
-	}
-	if w.Category != nil {
-		r.Category = &CategoryRef{ID: w.Category.ID, Name: w.Category.Name, Path: strings.Trim(w.Category.URL, "/")}
-	}
-	if w.Search != nil {
-		if r.Query == "" {
-			r.Query = strings.Join(w.Search.Terms, " ")
-		}
-		for _, s := range w.Search.Suggestions.Terms {
-			r.Suggestions = append(r.Suggestions, s.Label)
-		}
-	}
-	for _, a := range w.Filters.Applied {
-		facet := a.CategoryID
-		if facet == "" {
-			facet = "price"
-		}
-		r.Applied = append(r.Applied, AppliedFilter{Facet: facet, ID: a.ID, Label: a.Label})
-	}
-	for _, wf := range w.Filters.Items {
-		fc := Facet{ID: wf.ID, Kind: wf.Kind}
-		if wf.Label != nil {
-			fc.Label = *wf.Label
-		}
-		if wf.Range != nil {
-			fc.Min, fc.Max = wf.Range.Min, wf.Range.Max
-			spec := wf.Range.URL
-			r.rangeU = &spec
-		}
-		var vals []wireFacetValue
-		_ = json.Unmarshal(wf.Values, &vals) // a ref or null means no values
-		for _, v := range vals {
-			fv := FacetValue{Label: v.Label, Count: v.Count, Applied: bool(v.IsApplied), url: v.URL}
-			if v.ID != nil {
-				fv.ID = *v.ID
-			}
-			fc.Values = append(fc.Values, fv)
-		}
-		r.Facets = append(r.Facets, fc)
-	}
-	for _, s := range w.Sorts {
-		r.Sorts = append(r.Sorts, SortOption{ID: s.ID, Applied: bool(s.IsApplied), url: s.URL})
-	}
-	for _, wp := range w.Products {
-		r.Products = append(r.Products, wp.product(p.URL))
-	}
-	return r, nil
-}
-
-func (wp wireProduct) product(pageURL string) Product {
-	p := Product{ID: wp.SupermodelID, SkuID: wp.SkuID, Title: strings.TrimSpace(wp.Label), URL: absURL(pageURL, wp.URL)}
-	var imgs []struct {
-		Src string `json:"src"`
-	}
-	if json.Unmarshal(wp.Images, &imgs) == nil && len(imgs) > 0 {
-		p.Image = imgs[0].Src
-	}
-	if wp.Reviews != nil {
-		p.Rating, p.Reviews = wp.Reviews.Notation, wp.Reviews.Count
-	}
-	if len(wp.Models) > 0 {
-		m := wp.Models[0]
-		p.ModelID, p.Brand, p.AvailableOnline = m.ID, m.Brand, m.AvailableOnline
-		if m.SkuID != "" {
-			p.SkuID = m.SkuID
-		}
-		var mo money
-		if json.Unmarshal(m.Price, &mo) == nil {
-			main := mo.Currencies.Main
-			p.Price, p.Currency, p.ReferencePrice, p.DiscountPercent = main.ValueWithTaxes, main.Currency, main.ReferenceValueWithTaxes, main.DiscountPercentage
-		}
-		_ = json.Unmarshal(m.AvailableSizes, &p.Sizes)
-		if m.Seller != nil {
-			p.Seller = m.Seller.ID
-			p.Marketplace = m.Seller.Type != "" && m.Seller.Type != "FIRST_PARTY"
-		}
-		if m.URL != "" {
-			p.URL = absURL(pageURL, m.URL)
-		}
-	}
-	if p.ID == "" {
-		p.ID, _, _ = strings.Cut(wp.ID, "_")
-	}
-	p.Ref = p.ID + "/" + p.ModelID
-	if u, err := url.Parse(p.URL); err == nil && strings.Contains(u.Path, "/p/mp/") {
-		// Marketplace listings: uuid ids, no numeric model, a /c<n> variance.
-		p.Ref = "mp/" + p.ID + "/" + u.Path[strings.LastIndex(u.Path, "/")+1:]
-	}
-	return p
-}
-
-func absURL(pageURL, ref string) string {
-	base, err := url.Parse(pageURL)
-	if err != nil {
-		return ref
-	}
-	u, err := base.Parse(ref)
-	if err != nil {
-		return ref
-	}
-	return u.String()
-}
 
 // SearchParams is everything `search` can ask for. Filters are matched
 // against the facets the unfiltered page offers, so any filter the website
@@ -362,14 +31,34 @@ type FilterArg struct {
 	Value string `json:"value"`
 }
 
-// Sorts maps CLI names to the site's sort ids.
-var Sorts = map[string]string{
-	"relevance":  "rankingRule",
-	"price_asc":  "priceAscending",
-	"price_desc": "priceDescending",
-	"discount":   "discountRateDescending",
-	"rating":     "reviewDescending",
-	"newest":     "newArrivals",
+// sortTable maps CLI sort names to the site's sort ids, in the order the CLI
+// documents them.
+var sortTable = []struct{ name, id string }{
+	{"relevance", "rankingRule"},
+	{"price_asc", "priceAscending"},
+	{"price_desc", "priceDescending"},
+	{"discount", "discountRateDescending"},
+	{"rating", "reviewDescending"},
+	{"newest", "newArrivals"},
+}
+
+// SortID maps a CLI sort name to the site's sort id.
+func SortID(name string) (string, bool) {
+	for _, s := range sortTable {
+		if s.name == name {
+			return s.id, true
+		}
+	}
+	return "", false
+}
+
+// SortNames lists the CLI sort names in documented order.
+func SortNames() []string {
+	out := make([]string, len(sortTable))
+	for i, s := range sortTable {
+		out[i] = s.name
+	}
+	return out
 }
 
 // facetAliases are CLI-friendly names for the facet ids pages use.
@@ -383,20 +72,39 @@ var facetAliases = map[string][]string{
 	"subcategory": {"categories"},
 }
 
-// DeliveryValues maps --delivery to the leadTime facet's value ids.
-var DeliveryValues = map[string]string{"24h": "ud-0-24", "48h": "ud-0-48"}
+// deliveryTable maps --delivery names to the leadTime facet's value ids.
+var deliveryTable = []struct{ name, id string }{
+	{"24h", "ud-0-24"},
+	{"48h", "ud-0-48"},
+}
 
-const (
-	resolveTTL = 10 * time.Minute // unfiltered page used to resolve filter values
-	// landingPage marks the usage error ParseListing returns for a section
-	// page with no grid, so `category show` can fall back to the menu.
-	landingPage = -1
-)
+// DeliveryID maps a --delivery name to the facet value id.
+func DeliveryID(name string) (string, bool) {
+	for _, d := range deliveryTable {
+		if d.name == name {
+			return d.id, true
+		}
+	}
+	return "", false
+}
+
+// DeliveryNames lists the --delivery names in documented order.
+func DeliveryNames() []string {
+	out := make([]string, len(deliveryTable))
+	for i, d := range deliveryTable {
+		out[i] = d.name
+	}
+	return out
+}
+
+// resolveTTL is how long the unfiltered page used to resolve filter values is
+// cached.
+const resolveTTL = 10 * time.Minute
 
 // IsLandingPage reports whether err is ParseListing's "no product list here".
 func IsLandingPage(err error) bool {
 	var e *Error
-	return errors.As(err, &e) && e.Status == landingPage
+	return errors.As(err, &e) && e.Landing
 }
 
 func (p SearchParams) modified() bool {
@@ -429,8 +137,9 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, err
 	if err != nil {
 		return nil, err
 	}
+	modified := p.modified()
 	ttl := time.Duration(0)
-	if p.modified() {
+	if modified {
 		ttl = resolveTTL
 	}
 	page, err := c.Fetch(ctx, entry, ttl)
@@ -441,7 +150,7 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, err
 	if err != nil {
 		return nil, err
 	}
-	if !p.modified() {
+	if !modified {
 		// Keep it for the filter, sort or page request that may follow.
 		c.store(c.Abs(entry), page)
 		return base, nil
@@ -469,23 +178,48 @@ func (r *SearchResult) Build(p SearchParams) (string, *SearchResult, error) {
 	q := u.Query()
 	q.Del("from")
 	q.Del("size")
-	facets := q.Get("facets")
-	var segs []string
-	for _, fa := range p.Filters {
+	segs, empty, err := r.applyFilters(q, p.Filters)
+	if err != nil {
+		return "", nil, err
+	}
+	if empty {
+		return "", r.emptied(), nil
+	}
+	if err := r.applyPrice(q, p.MinPrice, p.MaxPrice); err != nil {
+		return "", nil, err
+	}
+	if err := r.applySort(q, p.Sort); err != nil {
+		return "", nil, err
+	}
+	applyPage(q, p.Page, r.PerPage)
+	if len(segs) > 0 {
+		u.Path = strings.TrimRight(u.Path, "/") + "/" + strings.Join(segs, "/")
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil, nil
+}
+
+// applyFilters folds each filter into the query string or the path segments,
+// using the fragments the page attaches to its own facet values. empty
+// reports the store-holds-none case, which is an empty listing, not a URL.
+func (r *SearchResult) applyFilters(q url.Values, filters []FilterArg) (segs []string, empty bool, err error) {
+	baseFacets := q.Get("facets")
+	facets := baseFacets
+	for _, fa := range filters {
 		fc, err := r.facet(fa.Key)
 		if err != nil {
-			return "", nil, err
+			return nil, false, err
 		}
 		v, err := fc.value(fa.Value, fa.Key)
 		if err != nil {
 			if fc.ID == "store" {
-				return "", r.emptied(), nil
+				return nil, true, nil
 			}
-			return "", nil, err
+			return nil, false, err
 		}
 		vu, err := r.base.Parse(v.url)
 		if err != nil {
-			return "", nil, apiChanged("facet value url %q: %v", v.url, err)
+			return nil, false, apiChanged("facet value url %q: %v", v.url, err)
 		}
 		for _, s := range strings.Split(strings.Trim(vu.Path, "/"), "/") {
 			if !strings.Contains("/"+strings.Trim(r.base.Path, "/")+"/", "/"+s+"/") {
@@ -495,7 +229,7 @@ func (r *SearchResult) Build(p SearchParams) (string, *SearchResult, error) {
 		for k, vs := range vu.Query() {
 			switch k {
 			case "facets":
-				facets += strings.TrimPrefix(vs[0], q.Get("facets"))
+				facets += strings.TrimPrefix(vs[0], baseFacets)
 			case "Ntt", "from", "size":
 			default:
 				q.Set(k, vs[0])
@@ -505,80 +239,96 @@ func (r *SearchResult) Build(p SearchParams) (string, *SearchResult, error) {
 	if facets != "" {
 		q.Set("facets", facets)
 	}
-	if p.MinPrice > 0 || p.MaxPrice > 0 {
-		if r.rangeU == nil {
-			return "", nil, Usage("this page offers no price filter")
-		}
-		lo, hi := p.MinPrice, p.MaxPrice
-		fc, _ := r.facet("price")
-		if fc != nil {
-			if lo <= 0 {
-				lo = fc.Min
-			}
-			if hi <= 0 {
-				hi = fc.Max
-			}
-		}
-		if hi > 0 && lo > hi {
-			return "", nil, Usage("--min-price is above --max-price")
-		}
-		pattern, err := url.QueryUnescape(r.rangeU.Pattern)
-		if err != nil {
-			return "", nil, apiChanged("price pattern %q: %v", r.rangeU.Pattern, err)
-		}
-		pattern = strings.ReplaceAll(pattern, "${min}", num(lo))
-		pattern = strings.ReplaceAll(pattern, "${max}", num(hi))
-		q.Set(r.rangeU.Key, pattern)
+	return segs, false, nil
+}
+
+// applyPrice fills the price range pattern the page itself uses.
+func (r *SearchResult) applyPrice(q url.Values, min, max float64) error {
+	if min <= 0 && max <= 0 {
+		return nil
 	}
-	if p.Sort != "" {
-		id, ok := Sorts[p.Sort]
-		if !ok {
-			return "", nil, Usage("--sort must be one of %s", strings.Join(sortedKeys(Sorts), ", "))
+	if r.rangeU == nil {
+		return Usage("this page offers no price filter")
+	}
+	lo, hi := min, max
+	if fc, err := r.facet("price"); err == nil {
+		if lo <= 0 {
+			lo = fc.Min
 		}
-		var so *SortOption
+		if hi <= 0 {
+			hi = fc.Max
+		}
+	}
+	if hi > 0 && lo > hi {
+		return Usage("--min-price is above --max-price")
+	}
+	pattern, err := url.QueryUnescape(r.rangeU.Pattern)
+	if err != nil {
+		return apiChanged("price pattern %q: %v", r.rangeU.Pattern, err)
+	}
+	pattern = strings.ReplaceAll(pattern, "${min}", num(lo))
+	pattern = strings.ReplaceAll(pattern, "${max}", num(hi))
+	q.Set(r.rangeU.Key, pattern)
+	return nil
+}
+
+// applySort adds the sort key the page's own sort option uses.
+func (r *SearchResult) applySort(q url.Values, name string) error {
+	if name == "" {
+		return nil
+	}
+	id, ok := SortID(name)
+	if !ok {
+		return Usage("--sort must be one of %s", strings.Join(SortNames(), ", "))
+	}
+	var so *SortOption
+	for i := range r.Sorts {
+		if r.Sorts[i].ID == id {
+			so = &r.Sorts[i]
+		}
+	}
+	if so == nil {
+		return Usage("this page cannot sort by %s; it offers %s", name, strings.Join(r.offeredSorts(), ", "))
+	}
+	su, err := r.base.Parse(so.url)
+	if err != nil {
+		return apiChanged("sort url %q: %v", so.url, err)
+	}
+	q.Del("sort")
+	q.Del("Ns")
+	for _, k := range []string{"sort", "Ns"} {
+		if v := su.Query().Get(k); v != "" {
+			q.Set(k, v)
+		}
+	}
+	return nil
+}
+
+// offeredSorts names the CLI sorts this page can do, in table order.
+func (r *SearchResult) offeredSorts() []string {
+	var out []string
+	for _, s := range sortTable {
 		for i := range r.Sorts {
-			if r.Sorts[i].ID == id {
-				so = &r.Sorts[i]
-			}
-		}
-		if so == nil {
-			var offered []string
-			for name, sid := range Sorts {
-				for _, s := range r.Sorts {
-					if s.ID == sid {
-						offered = append(offered, name)
-					}
-				}
-			}
-			sort.Strings(offered)
-			return "", nil, Usage("this page cannot sort by %s; it offers %s", p.Sort, strings.Join(offered, ", "))
-		}
-		su, err := r.base.Parse(so.url)
-		if err != nil {
-			return "", nil, apiChanged("sort url %q: %v", so.url, err)
-		}
-		q.Del("sort")
-		q.Del("Ns")
-		for _, k := range []string{"sort", "Ns"} {
-			if v := su.Query().Get(k); v != "" {
-				q.Set(k, v)
+			if r.Sorts[i].ID == s.id {
+				out = append(out, s.name)
 			}
 		}
 	}
-	if p.Page > 1 {
-		per := r.PerPage
-		if per == 0 {
-			per = 40
-		}
-		// Page 1 is from=0; page N starts N-1 pages in.
-		q.Set("from", strconv.Itoa((p.Page-1)*per))
-		q.Set("size", strconv.Itoa(per))
+	return out
+}
+
+// applyPage sets from/size for a 1-based page number; page 1 is the unfiltered
+// first page.
+func applyPage(q url.Values, page, perPage int) {
+	if page <= 1 {
+		return
 	}
-	if len(segs) > 0 {
-		u.Path = strings.TrimRight(u.Path, "/") + "/" + strings.Join(segs, "/")
+	per := perPage
+	if per == 0 {
+		per = 40
 	}
-	u.RawQuery = q.Encode()
-	return u.String(), nil, nil
+	q.Set("from", strconv.Itoa((page-1)*per))
+	q.Set("size", strconv.Itoa(per))
 }
 
 func (r *SearchResult) emptied() *SearchResult {
@@ -589,16 +339,6 @@ func (r *SearchResult) emptied() *SearchResult {
 
 func num(f float64) string { return strconv.FormatFloat(f, 'f', -1, 64) }
 
-func sortedKeys[V any](m map[string]V) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
-}
-
-// facet finds a facet by id, CLI alias or label.
 func (r *SearchResult) facet(key string) (*Facet, error) {
 	want := []string{key}
 	if ids, ok := facetAliases[strings.ToLower(key)]; ok {
@@ -631,7 +371,7 @@ func (r *SearchResult) facet(key string) (*Facet, error) {
 // unpadded, the way product pages and `store list` print them.
 func (f *Facet) value(v, key string) (*FacetValue, error) {
 	if f.ID == "leadTime" {
-		if id, ok := DeliveryValues[v]; ok {
+		if id, ok := DeliveryID(v); ok {
 			v = id
 		}
 	}
@@ -644,7 +384,13 @@ func (f *Facet) value(v, key string) (*FacetValue, error) {
 	for _, c := range cands {
 		for i := range f.Values {
 			fv := &f.Values[i]
-			if (fv.ID != "" && fv.ID == c) || fold(fv.Label) == fold(c) || slugOf(fv.url) == slug(c) {
+			if fv.ID != "" && fv.ID == c {
+				return fv, nil
+			}
+			if fold(fv.Label) == fold(c) {
+				return fv, nil
+			}
+			if s, ok := slugOf(fv.url); ok && s == slug(c) {
 				return fv, nil
 			}
 		}
@@ -662,42 +408,14 @@ func (f *Facet) value(v, key string) (*FacetValue, error) {
 
 // slugOf returns the slug a category facet value URL ends with
 // ("f-brand_quechua" -> "quechua"); keyword facet URLs have none.
-func slugOf(u string) string {
+func slugOf(u string) (string, bool) {
 	path, _, _ := strings.Cut(u, "?")
 	last := path[strings.LastIndex(path, "/")+1:]
 	if !strings.HasPrefix(last, "f-") {
-		return "\x00"
+		return "", false
 	}
 	_, s, ok := strings.Cut(last, "_")
-	if !ok {
-		return "\x00"
-	}
-	return s
-}
-
-// accents covers the letters Spanish (and the odd brand name) uses; the
-// site's own slugs drop them the same way.
-var accents = strings.NewReplacer("á", "a", "à", "a", "â", "a", "ä", "a", "é", "e", "è", "e", "ê", "e", "ë", "e",
-	"í", "i", "ì", "i", "î", "i", "ï", "i", "ó", "o", "ò", "o", "ô", "o", "ö", "o", "ú", "u", "ù", "u", "û", "u", "ü", "u",
-	"ñ", "n", "ç", "c", "º", "o", "ª", "a")
-
-// fold lowercases and strips accents, so "campaña" matches "CAMPAÑA" and
-// "campana".
-func fold(s string) string { return accents.Replace(strings.ToLower(strings.TrimSpace(s))) }
-
-func slug(s string) string {
-	var b strings.Builder
-	dash := false
-	for _, r := range fold(s) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-			dash = false
-		} else if !dash && b.Len() > 0 {
-			b.WriteByte('-')
-			dash = true
-		}
-	}
-	return strings.TrimRight(b.String(), "-")
+	return s, ok
 }
 
 // Filters returns the facets a search or category offers, for `search filters`.
@@ -711,11 +429,4 @@ func (c *Client) Filters(ctx context.Context, p SearchParams) (*SearchResult, er
 		return nil, err
 	}
 	return ParseListing(page)
-}
-
-// Path is the storefront path a value links to, without its query, in the
-// form --category takes. Subcategory values are category pages.
-func (v FacetValue) Path() string {
-	p, _, _ := strings.Cut(v.url, "?")
-	return strings.TrimPrefix(strings.Trim(p, "/"), "es/")
 }

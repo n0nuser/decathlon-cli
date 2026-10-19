@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 // Fixtures are real pages captured through the CLI's own transport on
@@ -341,8 +342,9 @@ func TestMarketplace(t *testing.T) {
 	if mp == nil {
 		t.Fatal("fixture has no marketplace product")
 	}
-	if !strings.HasPrefix(mp.Ref, "mp/") || strings.Contains(mp.Ref, "_") {
-		t.Fatalf("ref %q", mp.Ref)
+	wantRef := "mp/" + mp.ID + "/" + mp.URL[strings.LastIndex(mp.URL, "/")+1:]
+	if mp.Ref != wantRef || strings.Contains(mp.Ref, "_") {
+		t.Fatalf("listing ref %q, want %q", mp.Ref, wantRef)
 	}
 	if _, err := ProductPath(mp.Ref); err != nil {
 		t.Fatal(err)
@@ -388,5 +390,50 @@ func TestFetchRefusesForeignHost(t *testing.T) {
 		if !errors.As(err, &e) || e.Kind != KindUsage {
 			t.Fatalf("Fetch(%s): want usage error, got %v", target, err)
 		}
+	}
+}
+
+// Regression (bug 13, review T12): the sort and delivery tables had three
+// copies (map keys, CLI helper, help text). The API table is now the source.
+func TestSortAndDeliveryTables(t *testing.T) {
+	if got, want := SortNames(), []string{"relevance", "price_asc", "price_desc", "discount", "rating", "newest"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("sort names %v", got)
+	}
+	for name, want := range map[string]string{"relevance": "rankingRule", "price_asc": "priceAscending", "price_desc": "priceDescending", "discount": "discountRateDescending", "rating": "reviewDescending", "newest": "newArrivals"} {
+		if id, ok := SortID(name); !ok || id != want {
+			t.Errorf("SortID(%q) = %q %v, want %q", name, id, ok, want)
+		}
+	}
+	if _, ok := SortID("cheapest"); ok {
+		t.Error("unknown sort accepted")
+	}
+	if got, want := DeliveryNames(), []string{"24h", "48h"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("delivery names %v", got)
+	}
+	if id, ok := DeliveryID("48h"); !ok || id != "ud-0-48" {
+		t.Errorf("DeliveryID(48h) = %q %v", id, ok)
+	}
+}
+
+// A name that matches several stores is as ambiguous as a city does; only a
+// single exact match wins without the id (cli-spec §4 store show).
+func TestFindStoreAmbiguousName(t *testing.T) {
+	stores := []Store{{ID: "1", Name: "Pamplona", City: "Berriozar"}, {ID: "2", Name: "Pamplona", City: "Noáin"}}
+	_, err := FindStore(stores, "Pamplona")
+	var e *Error
+	if !errors.As(err, &e) || e.Kind != KindUsage {
+		t.Fatalf("duplicate exact name: %v", err)
+	}
+	if s, err := FindStore(stores, "001"); err != nil || s.ID != "1" {
+		t.Fatalf("id lookup: %+v %v", s, err)
+	}
+}
+
+// An error body is cut into a URL query; cutting mid-rune must not produce
+// invalid UTF-8.
+func TestExcerptKeepsValidUTF8(t *testing.T) {
+	got := excerpt([]byte(strings.Repeat("ñ", 400)))
+	if !utf8.ValidString(got) || utf8.RuneCountInString(got) != 300 {
+		t.Fatalf("excerpt: %d runes, valid=%v", utf8.RuneCountInString(got), utf8.ValidString(got))
 	}
 }

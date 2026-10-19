@@ -53,7 +53,6 @@ type wireStore struct {
 		OpenHour  string `json:"openHour"`
 		CloseHour string `json:"closeHour"`
 	} `json:"workingHours"`
-	PublishOnEcommerce bool `json:"publishOnEcommerce"`
 }
 
 // StoreDirectoryTTL is how long the store list is cached; stores open and
@@ -124,23 +123,30 @@ func FindStore(stores []Store, ref string) (*Store, error) {
 		}
 		return nil, notFound("no store with id %s (see `decathlon store list`)", ref)
 	}
-	var matches []*Store
+	want := fold(ref)
+	var exact, loose []*Store
 	for i := range stores {
-		if fold(stores[i].Name) == fold(ref) {
-			return &stores[i], nil
-		}
-		if strings.Contains(fold(stores[i].Name), fold(ref)) || fold(stores[i].City) == fold(ref) {
-			matches = append(matches, &stores[i])
+		switch {
+		case fold(stores[i].Name) == want:
+			exact = append(exact, &stores[i])
+		case strings.Contains(fold(stores[i].Name), want) || fold(stores[i].City) == want:
+			loose = append(loose, &stores[i])
 		}
 	}
-	switch len(matches) {
-	case 0:
+	// A name that matches more than one store is as ambiguous as a city does;
+	// only a single exact match may win without the id.
+	switch {
+	case len(exact) == 1:
+		return exact[0], nil
+	case len(exact) > 1:
+		loose = exact
+	case len(loose) == 1:
+		return loose[0], nil
+	case len(loose) == 0:
 		return nil, notFound("no store matches %q (see `decathlon store list`)", ref)
-	case 1:
-		return matches[0], nil
 	}
 	var names []string
-	for _, m := range matches {
+	for _, m := range loose {
 		names = append(names, m.ID+" "+m.Name)
 	}
 	return nil, Usage("%q matches several stores: %s. Use the id", ref, strings.Join(names, ", "))

@@ -16,18 +16,13 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const (
-	KindSearch  = "search"
-	KindProduct = "product"
-)
-
 type Store struct{ db *sql.DB }
 
 // Watch is one saved target. Target is kind-specific JSON.
 type Watch struct {
 	ID          int64           `json:"-"`
 	Name        string          `json:"name"`
-	Kind        string          `json:"kind"`
+	Kind        Kind            `json:"kind"`
 	Target      json.RawMessage `json:"target"`
 	Sinks       []string        `json:"sinks"`
 	Interval    Duration        `json:"interval"`
@@ -57,19 +52,6 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 type Seen struct {
 	Key      string
 	Snapshot json.RawMessage
-}
-
-// Event is one change a check found. Product, SKU, Store and Change are
-// JSON so each event type carries only what applies to it.
-type Event struct {
-	ID      int64           `json:"-"`
-	Type    string          `json:"type"`
-	Watch   string          `json:"watch"`
-	At      time.Time       `json:"at"`
-	Product json.RawMessage `json:"product,omitempty"`
-	SKU     json.RawMessage `json:"sku,omitempty"`
-	Store   json.RawMessage `json:"store,omitempty"`
-	Change  json.RawMessage `json:"change,omitempty"`
 }
 
 const schema = `

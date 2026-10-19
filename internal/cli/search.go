@@ -29,19 +29,15 @@ func (a *App) bindSearchFlags(cmd *cobra.Command, f *searchFlags) *pflag.FlagSet
 	fs.StringVar(&f.category, "category", "", "list a category instead of searching keywords (path from `decathlon category list`)")
 	fs.StringArrayVar(&f.brands, "brand", nil, "brand, repeatable (any brand the page lists)")
 	fs.StringVar(&f.store, "store", "", "only products in stock at this store (id or name; category listings only)")
-	fs.StringVar(&f.delivery, "delivery", "", "only products delivered within 24h or 48h (category listings only)")
+	fs.StringVar(&f.delivery, "delivery", "", "only products delivered within "+strings.Join(api.DeliveryNames(), " or ")+" (category listings only)")
 	fs.Float64Var(&f.minPrice, "min-price", 0, "minimum price in euros")
 	fs.Float64Var(&f.maxPrice, "max-price", 0, "maximum price in euros")
-	fs.StringVar(&f.sort, "sort", "", "relevance, price_asc, price_desc, discount, rating, newest (newest: categories only)")
+	fs.StringVar(&f.sort, "sort", "", strings.Join(api.SortNames(), ", ")+" (newest: categories only)")
 	fs.StringArrayVar(&f.filters, "filter", nil, "any other filter the page offers, as key=value, repeatable (see `decathlon search filters`)")
 	cmd.Flags().AddFlagSet(fs)
-	_ = cmd.RegisterFlagCompletionFunc("sort", cobra.FixedCompletions(sortNames(), cobra.ShellCompDirectiveNoFileComp))
-	_ = cmd.RegisterFlagCompletionFunc("delivery", cobra.FixedCompletions([]string{"24h", "48h"}, cobra.ShellCompDirectiveNoFileComp))
+	_ = cmd.RegisterFlagCompletionFunc("sort", cobra.FixedCompletions(api.SortNames(), cobra.ShellCompDirectiveNoFileComp))
+	_ = cmd.RegisterFlagCompletionFunc("delivery", cobra.FixedCompletions(api.DeliveryNames(), cobra.ShellCompDirectiveNoFileComp))
 	return fs
-}
-
-func sortNames() []string {
-	return []string{"relevance", "price_asc", "price_desc", "discount", "rating", "newest"}
 }
 
 func (f searchFlags) params(keywords []string) (api.SearchParams, error) {
@@ -53,8 +49,8 @@ func (f searchFlags) params(keywords []string) (api.SearchParams, error) {
 		return p, output.Usagef("prices must be positive")
 	}
 	if f.sort != "" {
-		if _, ok := api.Sorts[f.sort]; !ok {
-			return p, output.Usagef("--sort must be one of %s", strings.Join(sortNames(), ", "))
+		if _, ok := api.SortID(f.sort); !ok {
+			return p, output.Usagef("--sort must be one of %s", strings.Join(api.SortNames(), ", "))
 		}
 	}
 	for _, b := range f.brands {
@@ -64,7 +60,7 @@ func (f searchFlags) params(keywords []string) (api.SearchParams, error) {
 		p.Filters = append(p.Filters, api.FilterArg{Key: "store", Value: f.store})
 	}
 	if f.delivery != "" {
-		if _, ok := api.DeliveryValues[f.delivery]; !ok {
+		if _, ok := api.DeliveryID(f.delivery); !ok {
 			return p, output.Usagef("--delivery must be 24h or 48h")
 		}
 		p.Filters = append(p.Filters, api.FilterArg{Key: "delivery", Value: f.delivery})

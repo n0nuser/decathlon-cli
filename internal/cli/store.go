@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
@@ -12,8 +11,6 @@ import (
 	"github.com/n0nuser/decathlon-cli/internal/api"
 	"github.com/n0nuser/decathlon-cli/internal/output"
 )
-
-func jsonOf(v any) ([]byte, error) { return json.Marshal(v) }
 
 // parseNear reads "lat,lng". Empty falls back to config location.
 func (a *App) parseNear(s string) (lat, lng float64, ok bool, err error) {

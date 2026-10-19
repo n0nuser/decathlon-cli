@@ -56,6 +56,9 @@ type Error struct {
 	Endpoint  string // path only, never the query: search terms stay private
 	Body      string // short, for the issue form
 	Retryable bool
+	// Landing marks a section page with no product list. It is still a
+	// usage error (exit 2), but `category show` falls back to the menu.
+	Landing bool
 }
 
 func (e *Error) Error() string { return e.Msg }

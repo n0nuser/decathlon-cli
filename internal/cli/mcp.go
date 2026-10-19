@@ -72,21 +72,18 @@ func (a *App) runInProcess(ctx context.Context, argv []string) mcp.Result {
 	root.SetArgs(args)
 	root.SetOut(&out)
 	root.SetErr(&errb)
-	_, err := root.ExecuteContextC(ctx)
+	cmd, err := root.ExecuteContextC(ctx)
 	if sub.store != nil {
 		sub.store.Close()
 	}
 	r := mcp.Result{Stdout: out.String()}
 	if err != nil {
-		var env bytes.Buffer
-		path := []string{"decathlon"}
-		for _, w := range argv {
-			if strings.HasPrefix(w, "-") {
-				break // no argument values: search terms stay out of issue links
-			}
-			path = append(path, w)
+		path := "decathlon"
+		if cmd != nil {
+			path = cmd.CommandPath()
 		}
-		output.PrintError(&env, err, output.ErrJSON, a.Version, strings.Join(path, " "))
+		var env bytes.Buffer
+		output.PrintError(&env, err, output.ErrJSON, a.Version, path)
 		r.ErrorJSON = strings.TrimSpace(env.String())
 	}
 	return r

@@ -239,11 +239,12 @@ internal/api/        transport (session, cache, throttle), flight parser, search
 internal/cli/        one file per noun; skills/ holds the embedded agent notes
 internal/config/     XDG paths, config.toml
 internal/output/     json/jsonl/pretty/toon, error envelope, exit codes
-internal/store/      SQLite: watches, seen state, events
+internal/store/      SQLite: watches, seen state, events; the event model
 internal/watch/      one check per watch kind, diffing, events
 internal/sink/       ntfy, webhook, exec
 internal/mcp/        JSON-RPC over stdio, the tool list, harness config writers
 internal/updater/    GitHub release check and verified self-replace
+internal/atomicfile/ atomic file writes (config, session, cache, harness configs)
 docs/                this spec, API discovery, ADRs
 ```
 

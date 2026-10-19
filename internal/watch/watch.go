@@ -16,20 +16,6 @@ import (
 	"github.com/n0nuser/decathlon-cli/internal/store"
 )
 
-// Event types.
-const (
-	ProductNew          = "product.new"           // a search lists a product it did not before
-	ProductPriceChanged = "product.price_changed" // a model's price moved
-	ProductRemoved      = "product.removed"       // the product page is gone
-	SKUNew              = "sku.new"               // a size appeared on a watched product
-	SKUBackOnline       = "sku.back_online"
-	SKUSoldOutOnline    = "sku.sold_out_online"
-	StoreInStock        = "store.in_stock"     // a watched store now holds a size
-	StoreOutOfStock     = "store.out_of_stock" // a watched store no longer does
-)
-
-var Types = []string{ProductNew, ProductPriceChanged, ProductRemoved, SKUNew, SKUBackOnline, SKUSoldOutOnline, StoreInStock, StoreOutOfStock}
-
 type SearchTarget struct {
 	Params api.SearchParams `json:"params"`
 	Pages  int              `json:"pages"`
@@ -44,45 +30,27 @@ type ProductTarget struct {
 	Stores []string `json:"stores,omitempty"`
 }
 
+// Target is a watch target. The concrete type fixes its kind, so a caller
+// cannot pair a search payload with the product kind.
+type Target interface {
+	Kind() store.Kind
+}
+
+func (SearchTarget) Kind() store.Kind  { return store.KindSearch }
+func (ProductTarget) Kind() store.Kind { return store.KindProduct }
+
 type Result struct {
 	Events  []store.Event
 	Upserts []store.Seen
 	Removed []string
 }
 
-// Payloads carried by events.
-type ProductRef struct {
-	ID       string  `json:"id"`
-	ModelID  string  `json:"model_id,omitempty"`
-	Title    string  `json:"title"`
-	Price    float64 `json:"price,omitempty"`
-	Currency string  `json:"currency,omitempty"`
-	URL      string  `json:"url"`
-}
-
-type SKURef struct {
-	SkuID string `json:"sku_id"`
-	Size  string `json:"size"`
-	Color string `json:"color,omitempty"`
-}
-
-type StoreRef struct {
-	ID   string `json:"id"`
-	Name string `json:"name,omitempty"`
-	City string `json:"city,omitempty"`
-}
-
-type Change struct {
-	From any `json:"from"`
-	To   any `json:"to"`
-}
-
 type ev struct {
 	typ     string
-	product ProductRef
-	sku     *SKURef
-	store   *StoreRef
-	change  *Change
+	product store.ProductRef
+	sku     *store.SKURef
+	store   *store.StoreRef
+	change  *store.Change
 }
 
 func (e ev) event(w store.Watch, at time.Time) store.Event {
@@ -140,8 +108,8 @@ func Check(ctx context.Context, c *api.Client, st *store.Store, w store.Watch, e
 }
 
 type tileState struct {
-	Price float64    `json:"price"`
-	Ref   ProductRef `json:"ref"`
+	Price float64          `json:"price"`
+	Ref   store.ProductRef `json:"ref"`
 }
 
 func snap(v any) json.RawMessage {
@@ -169,15 +137,15 @@ func checkSearch(ctx context.Context, c *api.Client, t SearchTarget, seen map[st
 		}
 		for _, pr := range r.Products {
 			key := pr.ID + "/" + pr.ModelID
-			ref := ProductRef{ID: pr.ID, ModelID: pr.ModelID, Title: pr.Title, Price: pr.Price, Currency: pr.Currency, URL: pr.URL}
+			ref := store.ProductRef{ID: pr.ID, ModelID: pr.ModelID, Title: pr.Title, Price: pr.Price, Currency: pr.Currency, URL: pr.URL}
 			prev, known := seen[key]
 			if known {
 				var old tileState
 				if json.Unmarshal(prev.Snapshot, &old) == nil && old.Price != pr.Price && pr.Price > 0 {
-					evs = append(evs, ev{typ: ProductPriceChanged, product: ref, change: &Change{From: old.Price, To: pr.Price}})
+					evs = append(evs, ev{typ: store.ProductPriceChanged, product: ref, change: &store.Change{From: old.Price, To: pr.Price}})
 				}
 			} else if !baseline {
-				evs = append(evs, ev{typ: ProductNew, product: ref})
+				evs = append(evs, ev{typ: store.ProductNew, product: ref})
 			}
 			res.Upserts = append(res.Upserts, store.Seen{Key: key, Snapshot: snap(tileState{Price: pr.Price, Ref: ref})})
 			seen[key] = res.Upserts[len(res.Upserts)-1] // a product listed twice reports once
@@ -199,8 +167,8 @@ type skuState struct {
 }
 
 type modelState struct {
-	Price float64    `json:"price"`
-	Ref   ProductRef `json:"ref"`
+	Price float64          `json:"price"`
+	Ref   store.ProductRef `json:"ref"`
 }
 
 func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []api.Store, seen map[string]store.Seen, baseline bool) ([]ev, Result, error) {
@@ -215,7 +183,7 @@ func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []
 				if strings.HasPrefix(k, "m:") {
 					var m modelState
 					_ = json.Unmarshal(s.Snapshot, &m)
-					evs = append(evs, ev{typ: ProductRemoved, product: m.Ref})
+					evs = append(evs, ev{typ: store.ProductRemoved, product: m.Ref})
 				}
 				res.Removed = append(res.Removed, k)
 			}
@@ -241,12 +209,12 @@ func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []
 		if len(m.Colors) > 0 {
 			color = m.Colors[0]
 		}
-		ref := ProductRef{ID: d.ID, ModelID: m.ModelID, Title: d.Title, Price: m.Price, Currency: m.Currency, URL: m.URL}
+		ref := store.ProductRef{ID: d.ID, ModelID: m.ModelID, Title: d.Title, Price: m.Price, Currency: m.Currency, URL: m.URL}
 		mkey := "m:" + m.ModelID
 		if prev, ok := seen[mkey]; ok {
 			var old modelState
 			if json.Unmarshal(prev.Snapshot, &old) == nil && old.Price != m.Price && m.Price > 0 {
-				evs = append(evs, ev{typ: ProductPriceChanged, product: ref, change: &Change{From: old.Price, To: m.Price}})
+				evs = append(evs, ev{typ: store.ProductPriceChanged, product: ref, change: &store.Change{From: old.Price, To: m.Price}})
 			}
 		}
 		res.Upserts = append(res.Upserts, store.Seen{Key: mkey, Snapshot: snap(modelState{Price: m.Price, Ref: ref})})
@@ -263,7 +231,7 @@ func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []
 			}
 			sort.Strings(held)
 			cur := skuState{Online: s.AvailableOnline, Stores: held, Size: s.Size, Color: color, Model: m.ModelID}
-			skuRef := &SKURef{SkuID: s.SkuID, Size: s.Size, Color: color}
+			skuRef := &store.SKURef{SkuID: s.SkuID, Size: s.Size, Color: color}
 			key := "s:" + s.SkuID
 			prev, known := seen[key]
 			var old skuState
@@ -273,14 +241,14 @@ func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []
 			switch {
 			case known:
 				if cur.Online && !old.Online {
-					evs = append(evs, ev{typ: SKUBackOnline, product: ref, sku: skuRef})
+					evs = append(evs, ev{typ: store.SKUBackOnline, product: ref, sku: skuRef})
 				}
 				if !cur.Online && old.Online {
-					evs = append(evs, ev{typ: SKUSoldOutOnline, product: ref, sku: skuRef})
+					evs = append(evs, ev{typ: store.SKUSoldOutOnline, product: ref, sku: skuRef})
 				}
 				evs = append(evs, storeDiff(ref, skuRef, old.Stores, cur.Stores, byID)...)
 			case !baseline:
-				evs = append(evs, ev{typ: SKUNew, product: ref, sku: skuRef})
+				evs = append(evs, ev{typ: store.SKUNew, product: ref, sku: skuRef})
 				evs = append(evs, storeDiff(ref, skuRef, nil, cur.Stores, byID)...)
 			}
 			res.Upserts = append(res.Upserts, store.Seen{Key: key, Snapshot: snap(cur)})
@@ -306,16 +274,16 @@ func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []
 		if json.Unmarshal(seen[k].Snapshot, &old) != nil {
 			continue
 		}
-		ref := ProductRef{ID: d.ID, Title: d.Title, URL: d.URL}
+		ref := store.ProductRef{ID: d.ID, Title: d.Title, URL: d.URL}
 		if prev, ok := seen["m:"+old.Model]; ok {
 			var m modelState
 			if json.Unmarshal(prev.Snapshot, &m) == nil {
 				ref = m.Ref
 			}
 		}
-		skuRef := &SKURef{SkuID: strings.TrimPrefix(k, "s:"), Size: old.Size, Color: old.Color}
+		skuRef := &store.SKURef{SkuID: strings.TrimPrefix(k, "s:"), Size: old.Size, Color: old.Color}
 		if old.Online {
-			evs = append(evs, ev{typ: SKUSoldOutOnline, product: ref, sku: skuRef})
+			evs = append(evs, ev{typ: store.SKUSoldOutOnline, product: ref, sku: skuRef})
 		}
 		evs = append(evs, storeDiff(ref, skuRef, old.Stores, nil, byID)...)
 		if old.Online || len(old.Stores) > 0 {
@@ -331,7 +299,7 @@ func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []
 	return evs, res, nil
 }
 
-func storeDiff(p ProductRef, s *SKURef, before, after []string, byID map[string]api.Store) []ev {
+func storeDiff(p store.ProductRef, s *store.SKURef, before, after []string, byID map[string]api.Store) []ev {
 	was := map[string]bool{}
 	for _, id := range before {
 		was[id] = true
@@ -340,19 +308,19 @@ func storeDiff(p ProductRef, s *SKURef, before, after []string, byID map[string]
 	for _, id := range after {
 		is[id] = true
 	}
-	ref := func(id string) *StoreRef {
+	ref := func(id string) *store.StoreRef {
 		st := byID[id]
-		return &StoreRef{ID: id, Name: st.Name, City: st.City}
+		return &store.StoreRef{ID: id, Name: st.Name, City: st.City}
 	}
 	var out []ev
 	for _, id := range after {
 		if !was[id] {
-			out = append(out, ev{typ: StoreInStock, product: p, sku: s, store: ref(id)})
+			out = append(out, ev{typ: store.StoreInStock, product: p, sku: s, store: ref(id)})
 		}
 	}
 	for _, id := range before {
 		if !is[id] {
-			out = append(out, ev{typ: StoreOutOfStock, product: p, sku: s, store: ref(id)})
+			out = append(out, ev{typ: store.StoreOutOfStock, product: p, sku: s, store: ref(id)})
 		}
 	}
 	return out
@@ -360,12 +328,12 @@ func storeDiff(p ProductRef, s *SKURef, before, after []string, byID map[string]
 
 // Jitter spreads watches sharing one timer: up to a tenth of the interval.
 func Jitter(interval time.Duration, seed int64) time.Duration {
-	max := int64(interval / 10)
-	if max <= 0 {
+	limit := int64(interval / 10)
+	if limit <= 0 {
 		return 0
 	}
 	if seed < 0 {
 		seed = -seed
 	}
-	return time.Duration(seed % max)
+	return time.Duration(seed % limit)
 }

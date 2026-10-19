@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -11,12 +12,9 @@ import (
 	"github.com/n0nuser/decathlon-cli/internal/output"
 )
 
-type categoryTree struct {
-	cats  []api.Category
-	depth int
-}
+type categoryTree struct{ cats []api.Category }
 
-func (t categoryTree) MarshalJSON() ([]byte, error) { return jsonOf(t.cats) }
+func (t categoryTree) MarshalJSON() ([]byte, error) { return json.Marshal(t.cats) }
 
 func (t categoryTree) Pretty(w io.Writer, color bool) {
 	rows := [][]string{}
@@ -24,9 +22,7 @@ func (t categoryTree) Pretty(w io.Writer, color bool) {
 	walk = func(cs []api.Category, d int) {
 		for _, c := range cs {
 			rows = append(rows, []string{strings.Repeat("  ", d) + c.Name, output.Dim(c.Path, color)})
-			if d+1 < t.depth {
-				walk(c.Children, d+1)
-			}
+			walk(c.Children, d+1)
 		}
 	}
 	walk(t.cats, 0)
@@ -99,7 +95,7 @@ Examples:
 			if depth < 1 {
 				return output.Usagef("--depth must be at least 1")
 			}
-			return a.Printer.Print(categoryTree{prune(cats, depth), depth})
+			return a.Printer.Print(categoryTree{prune(cats, depth)})
 		},
 	}
 	list.Flags().IntVar(&depth, "depth", 2, "levels to show")

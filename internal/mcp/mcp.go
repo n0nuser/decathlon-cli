@@ -269,7 +269,10 @@ func Argv(name string, args map[string]any) ([]string, error) {
 		case "number", "integer":
 			f, ok := v.(float64)
 			if !ok || (a.Type == "integer" && f != float64(int64(f))) {
-				return nil, fmt.Errorf("%s: %s must be a%s", name, k, map[bool]string{true: "n integer", false: " number"}[a.Type == "integer"])
+				if a.Type == "integer" {
+					return nil, fmt.Errorf("%s: %s must be an integer", name, k)
+				}
+				return nil, fmt.Errorf("%s: %s must be a number", name, k)
 			}
 			vals = []string{strconv.FormatFloat(f, 'f', -1, 64)}
 		case "boolean":

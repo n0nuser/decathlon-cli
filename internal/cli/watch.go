@@ -8,14 +8,12 @@ import (
 	"io"
 	"math/rand/v2"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/n0nuser/decathlon-cli/internal/api"
-	"github.com/n0nuser/decathlon-cli/internal/config"
 	"github.com/n0nuser/decathlon-cli/internal/output"
 	"github.com/n0nuser/decathlon-cli/internal/sink"
 	"github.com/n0nuser/decathlon-cli/internal/store"
@@ -35,7 +33,7 @@ func (a *App) watchCmd() *cobra.Command {
 (new products, price changes). Watches live in a local database. Each check
 prints the events it found and sends them to the watch's sinks.
 
-Event types: ` + strings.Join(watch.Types, ", ") + `.
+Event types: ` + strings.Join(store.Types, ", ") + `.
 
 Examples:
   decathlon watch add product 303295/8513471 --store 169 --name tent --notify phone
@@ -83,7 +81,7 @@ func (a *App) interval(flag time.Duration) (time.Duration, error) {
 	return iv, nil
 }
 
-func (a *App) addWatch(ctx context.Context, kind string, target any, f watchAddFlags) error {
+func (a *App) addWatch(ctx context.Context, target watch.Target, f watchAddFlags) error {
 	if !nameRE.MatchString(f.name) {
 		return output.Usagef("--name is required: letters, digits, - and _, up to 64")
 	}
@@ -105,7 +103,7 @@ func (a *App) addWatch(ctx context.Context, kind string, target any, f watchAddF
 		return err
 	}
 	raw, _ := json.Marshal(target)
-	w := store.Watch{Name: f.name, Kind: kind, Target: raw, Sinks: f.notify, Interval: store.Duration(iv)}
+	w := store.Watch{Name: f.name, Kind: target.Kind(), Target: raw, Sinks: f.notify, Interval: store.Duration(iv)}
 	if w.Sinks == nil {
 		w.Sinks = []string{}
 	}
@@ -149,7 +147,7 @@ Examples:
 			if pages < 1 || pages > 5 {
 				return output.Usagef("--pages must be 1 to 5")
 			}
-			return a.addWatch(cmd.Context(), store.KindSearch, watch.SearchTarget{Params: p, Pages: pages}, wf)
+			return a.addWatch(cmd.Context(), watch.SearchTarget{Params: p, Pages: pages}, wf)
 		},
 	}
 	a.bindSearchFlags(cmd, &sf)
@@ -201,7 +199,7 @@ Examples:
 					return err
 				}
 			}
-			return a.addWatch(cmd.Context(), store.KindProduct, t, wf)
+			return a.addWatch(cmd.Context(), t, wf)
 		},
 	}
 	cmd.Flags().StringArrayVar(&stores, "store", nil, "stores whose stock to report (id or name), repeatable")
@@ -220,7 +218,7 @@ func (l watchList) Pretty(w io.Writer, color bool) {
 		if !x.LastCheckAt.IsZero() {
 			last = x.LastCheckAt.Local().Format("2006-01-02 15:04")
 		}
-		rows = append(rows, []string{x.Name, x.Kind, output.Truncate(describe(x), 60), x.Interval.String(), strings.Join(x.Sinks, ","), last})
+		rows = append(rows, []string{x.Name, string(x.Kind), output.Truncate(describe(x), 60), x.Interval.String(), strings.Join(x.Sinks, ","), last})
 	}
 	output.Table(w, color, []string{"NAME", "KIND", "TARGET", "EVERY", "SINKS", "LAST CHECK"}, rows)
 }
@@ -528,91 +526,4 @@ func (a *App) watchEventsCmd() *cobra.Command {
 	cmd.Flags().DurationVar(&since, "since", 0, "only events newer than this (e.g. 24h)")
 	cmd.Flags().IntVar(&limit, "limit", 50, "at most this many (0: all)")
 	return cmd
-}
-
-// sinks
-
-type sinkRow struct {
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	Target  string `json:"target"`
-	Problem string `json:"problem,omitempty"`
-}
-
-type sinkList []sinkRow
-
-func (l sinkList) Pretty(w io.Writer, color bool) {
-	rows := [][]string{}
-	for _, s := range l {
-		rows = append(rows, []string{s.Name, s.Type, output.Truncate(s.Target, 50), s.Problem})
-	}
-	output.Table(w, color, []string{"SINK", "TYPE", "TARGET", "PROBLEM"}, rows)
-}
-
-func (a *App) sinkCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "sink",
-		Short: "Notification targets declared in config",
-		Long: `Sinks are declared in config.toml and named by watches with --notify:
-
-  [sinks.phone]
-  type = "ntfy"
-  url = "https://ntfy.sh"
-  topic = "my-decathlon-alerts"
-
-  [sinks.discord]
-  type = "webhook"
-  url = "https://discord.com/api/webhooks/..."
-  template = "discord"
-
-  [sinks.script]
-  type = "exec"
-  command = ["/home/me/bin/on-decathlon-event"]   # event JSON on stdin`,
-	}
-	cmd.AddCommand(&cobra.Command{
-		Use: "list", Short: "List sinks and config problems", Args: cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			l := sinkList{}
-			for _, name := range sortedNames(a.Cfg.Sinks) {
-				s := a.Cfg.Sinks[name]
-				r := sinkRow{Name: name, Type: s.Type, Target: s.URL}
-				if s.Type == "ntfy" {
-					r.Target = strings.TrimRight(s.URL, "/") + "/" + s.Topic
-				}
-				if s.Type == "exec" {
-					r.Target = strings.Join(s.Command, " ")
-				}
-				if err := sink.Validate(name, s); err != nil {
-					r.Problem = err.Error()
-				}
-				l = append(l, r)
-			}
-			return a.Printer.Print(l)
-		},
-	}, &cobra.Command{
-		Use: "test NAME", Short: "Send a sample event to a sink", Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			s, ok := a.Cfg.Sinks[args[0]]
-			if !ok {
-				return output.Usagef("no sink %q in config", args[0])
-			}
-			p, _ := json.Marshal(watch.ProductRef{ID: "303295", ModelID: "8513471", Title: "Sample product (sink test)", Price: 24.99, Currency: "EUR", URL: a.Client.Abs("/es/p/_/303295/m8513471")})
-			st, _ := json.Marshal(watch.StoreRef{ID: "169", Name: "Pamplona"})
-			e := store.Event{Type: watch.StoreInStock, Watch: "sink-test", At: time.Now().UTC(), Product: p, Store: st}
-			if err := sink.Deliver(cmd.Context(), args[0], s, e); err != nil {
-				return err
-			}
-			return a.Printer.Print(map[string]any{"sink": args[0], "sent": true})
-		},
-	})
-	return cmd
-}
-
-func sortedNames(m map[string]config.SinkConfig) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }

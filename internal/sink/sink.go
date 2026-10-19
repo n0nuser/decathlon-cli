@@ -42,6 +42,18 @@ func Validate(name string, s config.SinkConfig) error {
 	return nil
 }
 
+// Target is where a sink delivers, for display: the ntfy topic URL, the exec
+// command, or the webhook URL.
+func Target(s config.SinkConfig) string {
+	switch s.Type {
+	case "ntfy":
+		return strings.TrimRight(s.URL, "/") + "/" + s.Topic
+	case "exec":
+		return strings.Join(s.Command, " ")
+	}
+	return s.URL
+}
+
 // Deliver sends one event. Failures are returned for the caller to report;
 // they never stop other sinks or the state commit.
 func Deliver(ctx context.Context, name string, s config.SinkConfig, e store.Event) error {
@@ -61,23 +73,10 @@ var client = &http.Client{Timeout: 15 * time.Second}
 
 // Text is the one-line human summary used by ntfy and chat webhooks.
 func Text(e store.Event) (title, body, link string) {
-	var p struct {
-		Title    string  `json:"title"`
-		Price    float64 `json:"price"`
-		Currency string  `json:"currency"`
-		URL      string  `json:"url"`
-	}
-	var sku struct {
-		Size string `json:"size"`
-	}
-	var st struct {
-		Name string `json:"name"`
-		ID   string `json:"id"`
-	}
-	var ch struct {
-		From any `json:"from"`
-		To   any `json:"to"`
-	}
+	var p store.ProductRef
+	var sku store.SKURef
+	var st store.StoreRef
+	var ch store.Change
 	_ = json.Unmarshal(e.Product, &p)
 	_ = json.Unmarshal(e.SKU, &sku)
 	_ = json.Unmarshal(e.Store, &st)
@@ -91,21 +90,21 @@ func Text(e store.Event) (title, body, link string) {
 		size = " (" + sku.Size + ")"
 	}
 	switch e.Type {
-	case "product.new":
+	case store.ProductNew:
 		title, body = "New: "+p.Title, fmt.Sprintf("%.2f %s", p.Price, p.Currency)
-	case "product.price_changed":
+	case store.ProductPriceChanged:
 		title, body = "Price: "+p.Title, fmt.Sprintf("%v -> %v %s", ch.From, ch.To, p.Currency)
-	case "product.removed":
+	case store.ProductRemoved:
 		title = "Gone: " + p.Title
-	case "sku.new":
+	case store.SKUNew:
 		title = "New size" + size + ": " + p.Title
-	case "sku.back_online":
+	case store.SKUBackOnline:
 		title = "Back online" + size + ": " + p.Title
-	case "sku.sold_out_online":
+	case store.SKUSoldOutOnline:
 		title = "Sold out online" + size + ": " + p.Title
-	case "store.in_stock":
+	case store.StoreInStock:
 		title, body = "In stock at "+where+size+": "+p.Title, fmt.Sprintf("%.2f %s", p.Price, p.Currency)
-	case "store.out_of_stock":
+	case store.StoreOutOfStock:
 		title = "Out of stock at " + where + size + ": " + p.Title
 	default:
 		title = e.Type + ": " + p.Title

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -128,6 +129,20 @@ var productRefRE = regexp.MustCompile(`/p/(?:mp/)?[^/]+/([A-Za-z0-9-]+)(?:/[a-z0
 
 var uuidRE = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 
+// modelRef is how a model is addressed: GROUP/MODEL for Decathlon's own
+// products, or mp/UUID/cN for a marketplace listing. Marketplace listings
+// carry a UUID group and a /c<n> variance, and their "model id" is not a
+// numeric model id, so the URL is the reliable signal.
+func modelRef(groupID, modelID, productURL string) string {
+	if u, err := url.Parse(productURL); err == nil && strings.Contains(u.Path, "/p/mp/") {
+		return "mp/" + groupID + "/" + path.Base(u.Path)
+	}
+	if modelID != "" {
+		return groupID + "/" + modelID
+	}
+	return groupID
+}
+
 // ProductPath turns what the user typed into a product page path:
 //   - a full product URL, used as given;
 //   - GROUP/MODEL (as `ref` in search output, e.g. 303295/8513471), which
@@ -249,12 +264,7 @@ func ParseProduct(p *Page) (*ProductDetail, error) {
 	}
 	for _, g := range ig.SkuGroups {
 		md := Model{ModelID: g.ModelID, Selected: g.IsSelected, URL: absURL(p.URL, g.ModelURL), SKUs: []SKU{}}
-		md.Ref = ig.ID + "/" + g.ModelID
-		if g.ModelID == "" {
-			if mu, err := url.Parse(md.URL); err == nil {
-				md.Ref = "mp/" + ig.ID + "/" + mu.Path[strings.LastIndex(mu.Path, "/")+1:]
-			}
-		}
+		md.Ref = modelRef(ig.ID, g.ModelID, md.URL)
 		for _, c := range g.VarianceAttributes.Colors {
 			md.Colors = append(md.Colors, c.Name)
 		}

@@ -439,6 +439,10 @@ func TestConfigRoundTrip(t *testing.T) {
 	if fi, err := os.Stat(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "decathlon-cli", "config.toml")); err != nil || fi.Mode().Perm() != 0o600 {
 		t.Fatalf("config.toml mode: %v %v", fi.Mode(), err)
 	}
+	// The config directory holds webhook secrets too; it is private, not 0755.
+	if fi, err := os.Stat(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "decathlon-cli")); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Fatalf("config dir mode: %v %v", fi.Mode(), err)
+	}
 	if _, _, code := run(t, "config", "set", "nonsense", "1"); code != 2 {
 		t.Fatal("unknown key accepted")
 	}
@@ -515,5 +519,34 @@ func TestWatchReportsVanishedSize(t *testing.T) {
 	out, _, _ = run(t, "watch", "check", "--all")
 	if strings.TrimSpace(out) != "[]" {
 		t.Fatalf("repeat: %s", out)
+	}
+}
+
+// Regression (review T13): the depth limit was enforced twice, once by prune
+// and once by Pretty; the second check and its field are gone.
+func TestCategoryListDepth(t *testing.T) {
+	newFake(t)
+	out, errs, code := run(t, "category", "list", "--depth", "1")
+	if code != 0 {
+		t.Fatal(errs)
+	}
+	var top []struct {
+		Path     string `json:"path"`
+		Children []any  `json:"children"`
+	}
+	if err := json.Unmarshal([]byte(out), &top); err != nil || len(top) == 0 {
+		t.Fatalf("depth 1: %v %s", err, out)
+	}
+	for _, c := range top {
+		if len(c.Children) != 0 {
+			t.Fatalf("depth 1 kept children under %q", c.Path)
+		}
+	}
+	out, errs, code = run(t, "category", "list", "--depth", "3")
+	if code != 0 {
+		t.Fatal(errs)
+	}
+	if !strings.Contains(out, `"children"`) {
+		t.Fatalf("depth 3 lost the tree: %s", out)
 	}
 }
