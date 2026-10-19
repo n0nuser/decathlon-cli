@@ -1,8 +1,7 @@
 {
-  "title": "Command reference",
-  "description": "Every command and flag, generated from the binary",
   "pages": [
     "index",
+    "global-flags",
     "category",
     "config",
     "doctor",
@@ -14,5 +13,6 @@
     "store",
     "update",
     "watch"
-  ]
+  ],
+  "title": "Command reference"
 }
