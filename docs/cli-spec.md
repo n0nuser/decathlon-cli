@@ -128,7 +128,7 @@ Sinks are declared in config, with type `ntfy` (`url`, `topic`, `token_file`), `
 ### config / doctor / update / mcp / skills
 
 - **config:** `config path | list | get KEY | set KEY VALUE | unset KEY` edits `config.toml` with dotted keys. Values are validated against the schema before writing, so an unknown key is exit 2. Negative numbers are values, not flags.
-- **doctor** checks four things and exits 1 if any fails: config, sinks, FlareSolverr's banner, and the session (stored, or minted now). It also fetches the home page over `net/http` with that session. `--mint` discards the session first.
+- **doctor** checks four things and exits 1 if any fails: config, sinks, FlareSolverr's banner, and the session (stored, or minted now). It also fetches the home page over `net/http` with that session. `--mint` discards the session first. A `config.toml` that does not parse is the first failed check rather than a usage error: doctor has to work when that is what is wrong.
 - **update:**
   - `update [--check] [--yes]` finds the GitHub latest release and verifies its archive against `checksums.txt` before replacing the binary.
   - Dev builds and package-manager installs are refused.
@@ -217,9 +217,9 @@ Precedence is flags, then env, then config.
 
 ## 10. Politeness and safety
 
-- Requests are sequential, at least 2 s apart. Watch intervals are at least 5 minutes.
+- Requests are sequential, at least 2 s apart. Watch intervals are at least 5 minutes, and the scheduler's jitter tolerance never pulls one below that.
 - The store directory and menu are cached for 24 h, filter-resolution pages for 10 min. Search results and product pages are never cached.
-- The CLI never sends anything to decathlon.es but GETs of public pages, and never phones home. The update check asks GitHub, and only for interactive use.
+- The CLI never sends anything to decathlon.es but GETs of public pages, never asks any other host for a page (a product or category URL on another host is refused), and never phones home. The update check asks GitHub, and only for interactive use.
 - `watch remove` asks for confirmation, or needs `--yes`.
 
 ## 11. Stack
