@@ -186,7 +186,7 @@ command path (no argument values), page path, HTTP status and the parser's messa
 
 | what | path | mode |
 |---|---|---|
-| config | `$XDG_CONFIG_HOME/decathlon-cli/config.toml` (or `DECATHLON_CONFIG`) | 0644 |
+| config | `$XDG_CONFIG_HOME/decathlon-cli/config.toml` (or `DECATHLON_CONFIG`) | 0600 (webhook URLs are secrets) |
 | session | `$XDG_CONFIG_HOME/decathlon-cli/session.json` | 0600, atomic |
 | watch state | `$XDG_DATA_HOME/decathlon-cli/state.db` (SQLite) | 0600 |
 | cache | `$XDG_CACHE_HOME/decathlon-cli/` | 0600 files |

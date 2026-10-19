@@ -186,10 +186,18 @@ func isChallenge(resp *http.Response, body []byte) bool {
 	if resp.Header.Get("Cf-Mitigated") == "challenge" {
 		return true
 	}
+	// The interstitial is a few KB; real pages are hundreds. Cloudflare has
+	// served it with 200 as well as 403/503, so the status alone is no guide.
+	if len(body) > 64<<10 {
+		return false
+	}
+	if bytes.Contains(body, []byte("_cf_chl_opt")) {
+		return true
+	}
 	if resp.StatusCode != http.StatusForbidden && resp.StatusCode != http.StatusServiceUnavailable {
 		return false
 	}
-	return bytes.Contains(body, []byte("_cf_chl_opt")) || bytes.Contains(body, []byte("challenges.cloudflare.com")) || bytes.Contains(body, []byte("Attention Required!"))
+	return bytes.Contains(body, []byte("challenges.cloudflare.com")) || bytes.Contains(body, []byte("Attention Required!"))
 }
 
 func excerpt(b []byte) string {

@@ -111,14 +111,14 @@ func Decode(raw []byte, c *Config) error {
 	return nil
 }
 
-// Save writes config.toml atomically. It holds no secrets (sink tokens live
-// in token_file), so it is world-readable like any dotfile.
+// Save writes config.toml atomically, private to the user: a webhook URL
+// is as good as a password for whoever reads it.
 func Save(path string, c Config) error {
 	raw, err := toml.Marshal(c)
 	if err != nil {
 		return err
 	}
-	return api.WriteFileAtomic(path, raw, 0o644)
+	return api.WriteFileAtomic(path, raw, 0o600)
 }
 
 // SolverURL picks FLARESOLVERR_URL, then config, then the default.

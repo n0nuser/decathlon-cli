@@ -192,6 +192,7 @@ type skuState struct {
 	Stores []string `json:"stores"`
 	Size   string   `json:"size"`
 	Color  string   `json:"color"`
+	Model  string   `json:"model"`
 }
 
 type modelState struct {
@@ -258,7 +259,7 @@ func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []
 				}
 			}
 			sort.Strings(held)
-			cur := skuState{Online: s.AvailableOnline, Stores: held, Size: s.Size, Color: color}
+			cur := skuState{Online: s.AvailableOnline, Stores: held, Size: s.Size, Color: color, Model: m.ModelID}
 			skuRef := &SKURef{SkuID: s.SkuID, Size: s.Size, Color: color}
 			key := "s:" + s.SkuID
 			prev, known := seen[key]
@@ -282,8 +283,47 @@ func checkProduct(ctx context.Context, c *api.Client, t ProductTarget, stores []
 			res.Upserts = append(res.Upserts, store.Seen{Key: key, Snapshot: snap(cur)})
 		}
 	}
+	// The page lists only sizes that exist right now: a size sold out
+	// everywhere disappears from it. A SKU seen before and missing now is
+	// reported as gone from every store and from the web shop, and kept as
+	// an empty state so its return is reported too.
+	current := map[string]bool{}
+	for _, u := range res.Upserts {
+		current[u.Key] = true
+	}
+	var vanished []string
+	for k := range seen {
+		if strings.HasPrefix(k, "s:") && !current[k] {
+			vanished = append(vanished, k)
+		}
+	}
+	sort.Strings(vanished)
+	for _, k := range vanished {
+		var old skuState
+		if json.Unmarshal(seen[k].Snapshot, &old) != nil {
+			continue
+		}
+		ref := ProductRef{ID: d.ID, Title: d.Title, URL: d.URL}
+		if prev, ok := seen["m:"+old.Model]; ok {
+			var m modelState
+			if json.Unmarshal(prev.Snapshot, &m) == nil {
+				ref = m.Ref
+			}
+		}
+		skuRef := &SKURef{SkuID: strings.TrimPrefix(k, "s:"), Size: old.Size, Color: old.Color}
+		if old.Online {
+			evs = append(evs, ev{typ: SKUSoldOutOnline, product: ref, sku: skuRef})
+		}
+		evs = append(evs, storeDiff(ref, skuRef, old.Stores, nil, byID)...)
+		if old.Online || len(old.Stores) > 0 {
+			gone := old
+			gone.Online, gone.Stores = false, []string{}
+			res.Upserts = append(res.Upserts, store.Seen{Key: k, Snapshot: snap(gone)})
+		}
+		matched = true
+	}
 	if !matched {
-		return nil, Result{}, &api.Error{Kind: api.KindNotFound, Msg: fmt.Sprintf("product %s has no model %q / size %q any more", d.ID, t.Model, t.Size)}
+		return nil, Result{}, &api.Error{Kind: api.KindNotFound, Msg: fmt.Sprintf("product %s has no model %q / size %q", d.ID, t.Model, t.Size)}
 	}
 	return evs, res, nil
 }

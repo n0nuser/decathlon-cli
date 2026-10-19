@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"text/tabwriter"
@@ -129,7 +130,7 @@ func Table(w io.Writer, color bool, header []string, rows [][]string) {
 	}
 	for _, r := range rows {
 		for i := range r {
-			r[i] = Clean(r[i])
+			r[i] = cleanCell(r[i])
 		}
 		fmt.Fprintln(tw, strings.Join(r, "\t"))
 	}
@@ -148,6 +149,27 @@ func Clean(s string) string {
 		}
 		return r
 	}, s)
+}
+
+var sgrRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// cleanCell is Clean that keeps the colour codes Bold/Dim/Green added:
+// a cell is cleaned around them, so only plain SGR survives, never cursor
+// movement or OSC sequences.
+func cleanCell(s string) string {
+	locs := sgrRE.FindAllStringIndex(s, -1)
+	if locs == nil {
+		return Clean(s)
+	}
+	var b strings.Builder
+	last := 0
+	for _, l := range locs {
+		b.WriteString(Clean(s[last:l[0]]))
+		b.WriteString(s[l[0]:l[1]])
+		last = l[1]
+	}
+	b.WriteString(Clean(s[last:]))
+	return b.String()
 }
 
 // Truncate shortens s to n runes, ending in an ellipsis.

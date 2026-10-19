@@ -41,6 +41,7 @@ type fake struct {
 	solver   *httptest.Server
 	mints    atomic.Int32
 	cookie   atomic.Value // the cookie value the gate currently accepts
+	soft     atomic.Bool  // serve the challenge with 200, as Cloudflare sometimes does
 	pages    map[string][]byte
 	redirect map[string]string
 }
@@ -60,8 +61,10 @@ func newFake(t *testing.T) *fake {
 	f.shop = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie("__cf_bm")
 		if err != nil || c.Value != f.cookie.Load().(string) || r.UserAgent() != "FakeBrowser/1.0" {
-			w.Header().Set("Cf-Mitigated", "challenge")
-			w.WriteHeader(http.StatusForbidden)
+			if !f.soft.Load() {
+				w.Header().Set("Cf-Mitigated", "challenge")
+				w.WriteHeader(http.StatusForbidden)
+			}
 			io.WriteString(w, "<html><title>Just a moment...</title><script>window._cf_chl_opt={}</script></html>")
 			return
 		}
@@ -159,6 +162,20 @@ func TestStaleSessionIsReminted(t *testing.T) {
 	_, errs, code := run(t, "search", "hornillo gas")
 	if code != 0 || f.mints.Load() != 2 || !strings.Contains(errs, "minting a new one") {
 		t.Fatalf("exit %d mints %d stderr %q", code, f.mints.Load(), errs)
+	}
+}
+
+// Regression (bug 7): a challenge page served with 200 failed flight parsing
+// and was reported as a storefront change (exit 7) instead of re-minting.
+func TestChallengeWith200IsReminted(t *testing.T) {
+	f := newFake(t)
+	f.soft.Store(true)
+	if _, errs, code := run(t, "store", "list"); code != 0 {
+		t.Fatal(errs)
+	}
+	f.cookie.Store("good-2")
+	if _, errs, code := run(t, "search", "hornillo gas"); code != 0 || f.mints.Load() != 2 {
+		t.Fatalf("exit %d mints %d: %s", code, f.mints.Load(), errs)
 	}
 }
 
@@ -275,6 +292,8 @@ func TestWatchReportsStoreStockChange(t *testing.T) {
 func TestConfigRoundTrip(t *testing.T) {
 	newFake(t)
 	for _, args := range [][]string{
+		{"config", "set", "sinks.hook.type", "webhook"},
+		{"config", "set", "sinks.hook.url", "https://example.invalid/secret"},
 		{"config", "set", "stores", `["169", "86"]`},
 		{"config", "set", "location.lat", "42.81"},
 		{"config", "set", "location.lng", "-1.64"},
@@ -282,6 +301,9 @@ func TestConfigRoundTrip(t *testing.T) {
 		if _, errs, code := run(t, args...); code != 0 {
 			t.Fatal(args, errs)
 		}
+	}
+	if fi, err := os.Stat(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "decathlon-cli", "config.toml")); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("config.toml mode: %v %v", fi.Mode(), err)
 	}
 	if _, _, code := run(t, "config", "set", "nonsense", "1"); code != 2 {
 		t.Fatal("unknown key accepted")
@@ -322,5 +344,42 @@ func TestMCP(t *testing.T) {
 	}
 	if !strings.Contains(lines[3], `-32602`) {
 		t.Fatal(lines[3])
+	}
+}
+
+// Regression (bug 6): product pages list only sizes that exist. A size sold
+// out everywhere disappears from the page, and the watch said nothing,
+// because it only diffed the SKUs it could still see.
+func TestWatchReportsVanishedSize(t *testing.T) {
+	f := newFake(t)
+	if _, errs, code := run(t, "watch", "add", "product", "303295/8513471", "--store", "169", "--name", "tent"); code != 0 {
+		t.Fatal(errs)
+	}
+	key := "/es/p/tienda-de-campana-2-personas-quechua-mh100/303295/c251c98c74m8513471"
+	// The old SKU is gone and a new one took its place.
+	f.pages[key] = bytes.ReplaceAll(f.pages[key], []byte("4ea60a8f-fc26-430a-85dc-d522a07a104a"), []byte("11111111-2222-4333-8444-555555555555"))
+	out, errs, code := run(t, "watch", "check", "--all", "--format", "jsonl")
+	if code != 0 {
+		t.Fatal(errs)
+	}
+	var types []string
+	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
+		var e struct {
+			Type string `json:"type"`
+			SKU  struct {
+				SkuID string `json:"sku_id"`
+			} `json:"sku"`
+		}
+		json.Unmarshal([]byte(l), &e)
+		types = append(types, e.Type+":"+e.SKU.SkuID[:4])
+	}
+	want := "sku.new:1111 store.in_stock:1111 sku.sold_out_online:4ea6 store.out_of_stock:4ea6"
+	if strings.Join(types, " ") != want {
+		t.Fatalf("got  %s\nwant %s", strings.Join(types, " "), want)
+	}
+	// Still gone: no repeat.
+	out, _, _ = run(t, "watch", "check", "--all")
+	if strings.TrimSpace(out) != "[]" {
+		t.Fatalf("repeat: %s", out)
 	}
 }
