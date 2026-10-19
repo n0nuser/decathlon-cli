@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="decathlon-cli">
+  <title>decathlon-cli</title>
+  <defs>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b8cff"/>
+      <stop offset="1" stop-color="#1f3fbf"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="32" fill="url(#mark)"/>
+  <path d="M24 96 L50 50 L70 78 L84 58 L104 96 Z" fill="#ffffff" fill-opacity="0.96"/>
+  <circle cx="86" cy="40" r="9" fill="#ffffff" fill-opacity="0.96"/>
+</svg>
